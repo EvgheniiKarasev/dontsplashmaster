@@ -1,0 +1,18 @@
+<linker>
+  <!-- SDK callbacks are invoked by name from the Poki JavaScript bridge. -->
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="PokiUnitySDK" preserve="all"/>
+  </assembly>
+  <!-- CreatePrimitive chooses these native components at runtime; scene dependency
+       scanning does not see the sphere/capsule colliders used by procedural objects. -->
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <type fullname="UnityEngine.SphereCollider" preserve="all"/>
+    <type fullname="UnityEngine.CapsuleCollider" preserve="all"/>
+    <type fullname="UnityEngine.BoxCollider" preserve="all"/>
+    <type fullname="UnityEngine.MeshCollider" preserve="all"/>
+  </assembly>
+  <assembly fullname="UnityEngine.CoreModule">
+    <type fullname="UnityEngine.MeshFilter" preserve="all"/>
+    <type fullname="UnityEngine.MeshRenderer" preserve="all"/>
+  </assembly>
+</linker>
