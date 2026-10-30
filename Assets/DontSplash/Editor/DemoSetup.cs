@@ -28,11 +28,6 @@ public static class DemoSetup {
    game.tileMaterial=AssetDatabase.LoadAssetAtPath<Material>(tilePath);
    if(!game.tileMaterial&&Shader.Find("DontSplash/PoolTiles")){game.tileMaterial=new Material(Shader.Find("DontSplash/PoolTiles"));AssetDatabase.CreateAsset(game.tileMaterial,tilePath);}
    game.surfaceMaterial=MaterialAsset("Assets/DontSplash/Surface.mat",Color.white);
-   game.monsterMaterial=MaterialAsset("Assets/DontSplash/Creature.mat",new Color(.65f,.72f,.65f),AssetDatabase.LoadAssetAtPath<Texture>("Assets/Monster/textures/body.png"));
-   const string normalPath="Assets/Monster/textures/body_n.png";
-   var normalImporter=AssetImporter.GetAtPath(normalPath) as TextureImporter;
-   if(normalImporter&&normalImporter.textureType!=TextureImporterType.NormalMap){normalImporter.textureType=TextureImporterType.NormalMap;normalImporter.SaveAndReimport();}
-   game.monsterMaterial.SetTexture("_BumpMap",AssetDatabase.LoadAssetAtPath<Texture>(normalPath));game.monsterMaterial.EnableKeyword("_NORMALMAP");game.monsterMaterial.SetFloat("_BumpScale",.8f);game.monsterMaterial.SetFloat("_Smoothness",.32f);
    game.bakedLobby=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/DontSplash/BakedLighting/Lobby.prefab");
    AssignDressing(game); game.waterMaterial=WaterMaterial(); game.bottleMaterial=MaterialAsset("Assets/DontSplash/Bottle.mat",new Color(.2f,.7f,.4f));
    EditorUtility.SetDirty(game);
@@ -41,7 +36,41 @@ public static class DemoSetup {
   if(opened)EditorSceneManager.CloseScene(scene,true);
   AssetDatabase.SaveAssets();
  }
- static void AssignDressing(SplashGame game){AssignUI(game);AssignFX(game);foreach(var asset in AssetDatabase.LoadAllAssetsAtPath("Assets/Monster/source/Monster 10.fbx")){if(asset is AnimationClip clip&&!clip.name.StartsWith("__preview__")){string take=clip.name.ToLowerInvariant();if(take.Contains("attack"))game.monsterAttack=clip;else if(take.EndsWith("|idle"))game.monsterIdle=clip;else if(take.EndsWith("|run"))game.monsterRun=clip;}}string prefix="Assets/Hypercasual Action Props Pack Volume 3/Prefabs/Standard Shader Prefabs/";string[] names={"WaterCooler","LargeFirstAidKit","WalkieTalkie","NuclearBarrel","EmergencyButtonCase_GRP"};game.dressingAssets=new GameObject[names.Length];for(int i=0;i<names.Length;i++)game.dressingAssets[i]=AssetDatabase.LoadAssetAtPath<GameObject>(prefix+names[i]+"_standardShader.prefab");} static void AssignUI(SplashGame game){
+ static void AssignDemogorgon(SplashGame game){
+  const string path="Assets/demogorgon-rig/source/Demogorgon.fbx";
+  var importer=AssetImporter.GetAtPath(path) as ModelImporter;
+  if(importer&&importer.clipAnimations.Length!=5){
+   var selected=new System.Collections.Generic.List<ModelImporterClipAnimation>();
+   foreach(var clip in importer.defaultClipAnimations){
+    string n=clip.name.Substring(clip.name.LastIndexOf('|')+1);
+    if(n!="Idle"&&n!="IdleHunt"&&n!="Run_8"&&n!="RunHunt_8"&&n!="Swing")continue;
+    clip.loopTime=n!="Swing";clip.lockRootRotation=true;clip.lockRootPositionXZ=true;clip.lockRootHeightY=true;
+    selected.Add(clip);
+   }
+   if(selected.Count==5){importer.clipAnimations=selected.ToArray();importer.importCameras=false;importer.importLights=false;importer.SaveAndReimport();}
+  }
+  game.monsterAsset=AssetDatabase.LoadAssetAtPath<GameObject>(path);game.monsterMaterial=null;
+  game.monsterAttack=game.monsterIdle=game.monsterWalk=game.monsterRun=game.monsterReveal=null;
+  foreach(var asset in AssetDatabase.LoadAllAssetsAtPath(path)){
+   if(!(asset is AnimationClip clip)||clip.name.StartsWith("__preview__"))continue;
+   string name=clip.name.Substring(clip.name.LastIndexOf('|')+1);
+   if(name=="Idle")game.monsterIdle=clip;
+   if(name=="Run_8")game.monsterWalk=clip;
+   if(name=="RunHunt_8")game.monsterRun=clip;
+   if(name=="IdleHunt")game.monsterReveal=clip;
+   if(name=="Swing")game.monsterAttack=clip;
+  }
+ }
+ static void AssignSounds(SplashGame game){
+  game.playerStepSound=AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/footstep.mp3");
+  game.playerJumpSound=AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/jump.mp3");
+  game.throwSound=AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/object_throw.mp3");
+  game.landingSound=AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/object-fall-soft-275694.mp3");
+  game.waterStepSound=AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/water_splash_step.mp3");
+  game.waterImpactSound=AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/water-splash-229315.mp3");
+  game.roomAmbienceSound=AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/ventilation_loop.wav");
+ }
+ static void AssignDressing(SplashGame game){AssignSounds(game);AssignUI(game);AssignFX(game);AssignDemogorgon(game);string prefix="Assets/Hypercasual Action Props Pack Volume 3/Prefabs/Standard Shader Prefabs/";string[] names={"WaterCooler","LargeFirstAidKit","WalkieTalkie","NuclearBarrel","EmergencyButtonCase_GRP"};game.dressingAssets=new GameObject[names.Length];for(int i=0;i<names.Length;i++)game.dressingAssets[i]=AssetDatabase.LoadAssetAtPath<GameObject>(prefix+names[i]+"_standardShader.prefab");} static void AssignUI(SplashGame game){
   const string root="Assets/Layer Lab/GUI Pro-SuperCasual/";
   game.uiButtonPrefab=AssetDatabase.LoadAssetAtPath<GameObject>(root+"Prefabs/Prefabs_Component_Buttons/Button_Round01_BtnText_White.prefab");
   game.uiPanelPrefab=AssetDatabase.LoadAssetAtPath<GameObject>(root+"Prefabs/Prefabs_Component_Frames/BasicFrame_Round20_White.prefab");
@@ -67,7 +96,7 @@ public static class DemoSetup {
   m.SetFloat("_NormalStrength",.42f);m.SetFloat("_NormalSpeed",.1f);m.SetVector("_NormalTiling",new Vector4(.38f,.38f,0,0));m.SetFloat("_SunReflectionStrength",.75f);m.SetFloat("_SunReflectionSize",.18f);m.SetFloat("_PointSpotLightReflectionStrength",.35f);m.SetFloat("_EdgeFade",.12f);m.SetFloat("_FoamOn",0);m.SetColor("_FoamColor",new Color(.5f,.75f,.66f,.04f));
   m.SetFloat("_IntersectionLength",.25f);m.SetFloat("_IntersectionFalloff",.3f);
   m.SetFloat("_DepthVertical",2);m.SetFloat("_DepthHorizontal",1.5f);m.SetFloat("_DisableDepthTexture",0);
-  m.SetColor("_ShallowColor",new Color(.14f,.32f,.3f,.88f));m.SetColor("_BaseColor",new Color(.035f,.16f,.18f,.98f));
+  m.SetColor("_ShallowColor",new Color(.28f,.52f,.24f,.88f));m.SetColor("_BaseColor",new Color(.07f,.30f,.12f,.98f));
   m.SetColor("_HorizonColor",new Color(.28f,.39f,.35f,.12f));m.SetColor("_IntersectionColor",new Color(.5f,.75f,.66f,.5f));
   foreach(var keyword in new[]{"_FOAM","_ADVANCED_SHADING","_REFRACTION","_WAVES","_CAUSTICS","_DISTANCE_NORMALS","_DISABLE_DEPTH_TEX"})m.DisableKeyword(keyword);
   m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");m.EnableKeyword("_RECEIVE_SHADOWS_OFF");EditorUtility.SetDirty(m);return m;
@@ -80,10 +109,9 @@ public static class DemoSetup {
  public static void Create(){
   var scene=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
   var game=new GameObject("DONT SPLASH").AddComponent<SplashGame>();
-  game.monsterAsset=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Monster/source/Monster 10.fbx");
+
   game.bottleAsset=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Hypercasual Action Props Pack Volume 3/Prefabs/Standard Shader Prefabs/Bottle_standardShader.prefab");
   game.surfaceMaterial=MaterialAsset("Assets/DontSplash/Surface.mat",Color.white);
-  game.monsterMaterial=MaterialAsset("Assets/DontSplash/Creature.mat",new Color(.65f,.72f,.65f),AssetDatabase.LoadAssetAtPath<Texture>("Assets/Monster/textures/body.png"));
   AssignDressing(game); game.waterMaterial=WaterMaterial(); game.bottleMaterial=MaterialAsset("Assets/DontSplash/Bottle.mat",new Color(.2f,.7f,.4f));
   EditorSceneManager.SaveScene(scene,"Assets/Scenes/DontSplash.unity");
   EditorBuildSettings.scenes=new[]{new EditorBuildSettingsScene("Assets/Scenes/DontSplash.unity",true)};

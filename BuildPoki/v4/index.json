@@ -1,0 +1,34 @@
+{
+	"poki_template_version": 1,
+	"extra_html": {
+	  "head": [
+		"<!-- will be copied to the resulting head //-->"
+	  ],
+	  "body": [
+		"<!-- will be copied to the resulting body //-->",
+		"<!-- will also be copied to the resulting body //-->"
+	  ]
+	},
+	"background_color": "#231F20",
+	"background_filename": "",
+	"code_filename": "dac8eea6509c1f8a60c4e04863228a83.wasm",
+	"company_name": "DefaultCompany",
+	"data_filename": "645ab7d493001eaa14cc5be76b8e8ab0.data",
+	"decompression_fallback": "",
+	"development_player": "false",
+	"framework_filename": "85c0ed571538687e03c31e9ff6077c1c.framework.js",
+	"height": "720",
+	"loader_filename": "9ff658c4b4ec2742827dbb7eaff469b7.loader.js",
+	"memory_filename": "",
+	"product_name": "DONT SPLASH",
+	"product_version": "0.1.0",
+	"splash_screen_style": "Dark",
+	"symbols_filename": "",
+	"unity_version": "6000.3.9f1",
+	"use_data_caching": "true",
+	"use_threads": "false",
+	"use_wasm": "true",
+	"use_webgl_1_0": "false",
+	"use_webgl_2_0": "true",
+	"width": "1280"
+  }

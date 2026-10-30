@@ -1,0 +1,6 @@
+Audio baseline: existing BuildPoki/v6 folder = 48,334,621 bytes (unarchived).
+New WebGL build not produced; download size delta remains unverified.
+Seven direct scene audio references, mono 22050 Hz, importer quality 0.4.
+Original 180-second ambience is not referenced; derived crossfaded loop is 14 seconds.
+Player footsteps alternate pitch 1.00 and 1.08; camera settings unchanged in this task.
+Verify in Unity/WebGL: movement versus stationary, air versus landing, water entry, thrown impacts, mute and pause, ambience loop seam.

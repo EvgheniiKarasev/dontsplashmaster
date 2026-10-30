@@ -20,7 +20,15 @@ public sealed partial class SplashGame {
  float HallHeight=>stage==2?13:stage==4?11:stage==7?5.7f:8;
  void ApplyAtmosphere(){
   if(!accent){accent=Mat(Color.white);concrete=Mat(new Color(.19f,.24f,.23f));metal=Mat(new Color(.11f,.16f,.17f));}
-  tile.color=Color.Lerp(new Color(.78f,.7f,.43f),wallColors[stage],.18f);accent.color=new Color(.48f,.46f,.27f);glow.color=new Color(.8f,.74f,.43f);glow.SetColor("_EmissionColor",new Color(.55f,.47f,.22f)*.35f);
+  int theme=(stage*LegCount+leg)%wallColors.Length;
+  var pixels=new Color[4096];int cell=theme%3==0?16:theme%3==1?8:32;
+  for(int y=0;y<64;y++)for(int x=0;x<64;x++){
+   int offset=theme%3==2&&(y/cell)%2==1?cell/2:0;
+   bool seam=(x+offset)%cell==0||y%cell==0;
+   pixels[y*64+x]=Color.white*(seam?.48f:(((x+offset)/cell+y/cell)%2==0?1f:.86f));
+  }
+  grid.SetPixels(pixels);grid.Apply();
+  tile.color=wallColors[theme];accent.color=MovingIntroduction?new Color(.25f,.67f,.9f):accents[theme];glow.color=new Color(.8f,.74f,.43f);glow.SetColor("_EmissionColor",new Color(.55f,.47f,.22f)*.35f);
   RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;
   RenderSettings.fogStartDistance=stage==7?5:12;
   RenderSettings.fogEndDistance=stage==7?22:stage==2?43:38;
@@ -30,7 +38,7 @@ public sealed partial class SplashGame {
   RenderSettings.ambientLight=new Color(.65f,.6f,.38f)*(stage==7?.35f:.85f);
   if(!ceilingLight)ceilingLight=GameObject.Find("Ceiling bounce").GetComponent<Light>();
   ceilingLight.intensity=stage==7?.3f:.75f;ceilingLight.color=new Color(1,.94f,.72f);
-  water.SetColor("_BaseColor",new Color(.075f,.25f,.20f,.98f));if(water.HasProperty("_ShallowColor"))water.SetColor("_ShallowColor",new Color(.25f,.46f,.33f,.88f));
+  water.SetColor("_BaseColor",new Color(.07f,.30f,.12f,.98f));if(water.HasProperty("_ShallowColor"))water.SetColor("_ShallowColor",new Color(.28f,.52f,.24f,.88f));
  }
  float RouteX(int i){
   float phase=leg*.65f;
@@ -43,7 +51,7 @@ public sealed partial class SplashGame {
  }
  void BuildArchitecture(){
   float w=HallWidth,h=HallHeight;
-  BuildPoolColumns();
+
   Shape("West wall",new Vector3(-w,h*.5f-1,EndZ/2),new Vector3(.6f,h+3,EndZ+20),tile);
   Shape("East wall",new Vector3(w,h*.5f-1,EndZ/2),new Vector3(.6f,h+3,EndZ+20),tile);
   Shape("Ceiling",new Vector3(0,h,EndZ/2),new Vector3(w*2,.5f,EndZ+20),tile);
@@ -113,8 +121,6 @@ public sealed partial class SplashGame {
   if(index==7)Prop(3,new Vector3(-2.5f,.45f,z-1),.7f,0);
  }
  void DressEntranceAndExit(){
-  Prop(0,new Vector3(-3,.5f,1),1.7f,90);
-  Prop(1,new Vector3(3,.5f,1),.8f,-20);
   Shape("Exit bulkhead",new Vector3(0,2.2f,EndZ+4),new Vector3(6,4.4f,.5f),metal);
   Shape("Exit inset",new Vector3(0,2,EndZ+3.7f),new Vector3(4,3.7f,.1f),accent,false);
   Shape("Exit seam",new Vector3(0,2,EndZ+3.6f),new Vector3(.04f,3.7f,.03f),glow,false);

@@ -154,6 +154,25 @@ MonoBehaviour:
   - {fileID: 4948240537910518285, guid: 9f0283eec78068744b8f676f868ef470, type: 3}
   - {fileID: 9170166396457103510, guid: aa52b170d07177344b76d59e000609c2, type: 3}
   - {fileID: 2272969887560785610, guid: 142fb3980cc68804a99fad41686bad50, type: 3}
+  monsterAsset: {fileID: 919132149155446097, guid: c6389b34426da4245b3632a187fcf0c0, type: 3}
+  bottleAsset: {fileID: 6477367244167319625, guid: 9802258a1b007084da7b9e78d4c08ca2, type: 3}
+  monsterAttack: {fileID: 1431416711932918876, guid: c6389b34426da4245b3632a187fcf0c0, type: 3}
+  monsterIdle: {fileID: -5355713376215739214, guid: c6389b34426da4245b3632a187fcf0c0, type: 3}
+  monsterRun: {fileID: -2412387824851261333, guid: c6389b34426da4245b3632a187fcf0c0, type: 3}
+  monsterWalk: {fileID: 3749709428364205868, guid: c6389b34426da4245b3632a187fcf0c0, type: 3}
+  monsterReveal: {fileID: 4218801344732505010, guid: c6389b34426da4245b3632a187fcf0c0, type: 3}
+  tileMaterial: {fileID: 2100000, guid: bd22b36b6647b8e4a98e124399518dd2, type: 2}
+  surfaceMaterial: {fileID: 2100000, guid: 77c5303cde21de4499a0797d3d3ed29a, type: 2}
+  monsterMaterial: {fileID: 0}
+  bottleMaterial: {fileID: 2100000, guid: 76359403c8f37054097f8ac52b59aec4, type: 2}
+  waterMaterial: {fileID: 2100000, guid: 59161a32404279a46bb03c5a3ae04b2e, type: 2}
+  playerStepSound: {fileID: 8300000, guid: b597c176219a0164a949eba140b465bc, type: 3}
+  playerJumpSound: {fileID: 8300000, guid: 972c10d938776684484962e0de2629ef, type: 3}
+  throwSound: {fileID: 8300000, guid: f33d85f0aa8414942ba80b3519845686, type: 3}
+  landingSound: {fileID: 8300000, guid: 446d37ea3606b20408e1ba9a5fe393ec, type: 3}
+  waterStepSound: {fileID: 8300000, guid: 9ce64dce424beae4a9c0eea92c9267c0, type: 3}
+  waterImpactSound: {fileID: 8300000, guid: 8ed43c3d21e88154b93a252149248412, type: 3}
+  roomAmbienceSound: {fileID: 8300000, guid: 47237b5dfde91d2600455da959366083, type: 3}
   fxAssets:
   - {fileID: 3223031359271505891, guid: 155410a7086d1d34ca48c448dfc33156, type: 3}
   - {fileID: 4035903591278710484, guid: aa122f157eac1c8428ae5db8a315ccd8, type: 3}
@@ -165,16 +184,6 @@ MonoBehaviour:
   uiTitlePrefab: {fileID: 6902288603587863163, guid: b5321e5cd1e2d4d43ae5cdda025d664f, type: 3}
   uiBodyFont: {fileID: 11400000, guid: d2d1aeb954629457095df6b4603312c4, type: 2}
   uiHeadingFont: {fileID: 11400000, guid: 715855d65a80d4bd1afb15a96bcf5a78, type: 2}
-  monsterAsset: {fileID: 919132149155446097, guid: 2f37fe7017973c04cbd0dbc8ebb61ef0, type: 3}
-  bottleAsset: {fileID: 6477367244167319625, guid: 9802258a1b007084da7b9e78d4c08ca2, type: 3}
-  monsterAttack: {fileID: -867567470825749192, guid: 2f37fe7017973c04cbd0dbc8ebb61ef0, type: 3}
-  monsterIdle: {fileID: 6666852152663627540, guid: 2f37fe7017973c04cbd0dbc8ebb61ef0, type: 3}
-  monsterRun: {fileID: -8541330177288970442, guid: 2f37fe7017973c04cbd0dbc8ebb61ef0, type: 3}
-  tileMaterial: {fileID: 2100000, guid: bd22b36b6647b8e4a98e124399518dd2, type: 2}
-  surfaceMaterial: {fileID: 2100000, guid: 77c5303cde21de4499a0797d3d3ed29a, type: 2}
-  monsterMaterial: {fileID: 2100000, guid: 2fe876a738a30bc4e882d12b7ff52d13, type: 2}
-  bottleMaterial: {fileID: 2100000, guid: 76359403c8f37054097f8ac52b59aec4, type: 2}
-  waterMaterial: {fileID: 2100000, guid: 59161a32404279a46bb03c5a3ae04b2e, type: 2}
 --- !u!4 &68015998
 Transform:
   m_ObjectHideFlags: 0

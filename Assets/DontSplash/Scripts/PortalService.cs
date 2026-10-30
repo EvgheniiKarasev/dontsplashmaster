@@ -29,6 +29,12 @@ public sealed class PortalService : MonoBehaviour {
   if(ready)PokiUnitySDK.Instance.gameplayStop();
 #endif
  }
+ public void Measure(string category,string what,string action){
+#if UNITY_WEBGL || UNITY_EDITOR
+  if(ready)PokiUnitySDK.Instance.measure(category,what,action);
+#endif
+ }
+ public void ContinueImmediately(Action next){if(Busy)return;AudioListener.pause=false;next();}
  public void Break(Action next){
   if(Busy)return;StopPlay();Busy=true;AudioListener.pause=true;
   Action done=()=>{Busy=false;AudioListener.pause=false;next();};

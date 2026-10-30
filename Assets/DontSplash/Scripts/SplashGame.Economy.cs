@@ -3,6 +3,68 @@ using UnityEngine.UI;
 using TMPro;
 namespace DontSplash {
 public sealed partial class SplashGame {
+ bool tutorialJumpLaunched,tutorialAirborne,tutorialJumpDone;
+ bool JumpHelpVisible=>FirstChamber&&!tutorialJumpDone&&body&&body.transform.position.z>-6;
+ bool NearShop=>InLobby&&Mathf.Abs(body.transform.position.x)>3&&Mathf.Abs(body.transform.position.x)<10&&body.transform.position.z>-21&&body.transform.position.z<-12;
+ bool CanUseNearby{
+  get{
+   if(mode!=Mode.Play||!body)return false;
+   if(NearShop)return true;
+   foreach(var valve in valves)if(!valve.done&&Vector3.Distance(body.transform.position+Vector3.up,valve.t.position)<2.5f)return true;
+   return false;
+  }
+ }
+ void TickJumpLesson(){
+  if(!FirstChamber||tutorialJumpDone||!tutorialJumpLaunched)return;
+  if(!body.isGrounded)tutorialAirborne=true;
+  if(wet>0){tutorialJumpLaunched=tutorialAirborne=false;return;}
+  if(!tutorialAirborne||!body.isGrounded)return;
+  foreach(var step in steps){
+   Vector3 local=step.t.InverseTransformPoint(body.transform.position);
+   if(step.home.z>=7&&Mathf.Abs(local.x)<.55f&&Mathf.Abs(local.z)<.55f&&body.transform.position.y>step.t.position.y&&body.transform.position.y<step.t.position.y+.85f){
+    tutorialJumpDone=true;PlayerPrefs.SetInt("DS.JumpLearned",1);PlayerPrefs.Save();portal.Measure("onboarding","first_jump","complete");Notice("Nice jump. Reach the coin ahead.",3);break;
+   }
+  }
+  tutorialJumpLaunched=tutorialAirborne=false;
+ }
+ bool FirstGiftPending=>PlayerPrefs.GetInt("DS.FirstGiftPending")==1&&PlayerPrefs.GetInt("DS.FirstGiftClaimed")==0;
+ void ClaimFirstGift(bool jumping){
+  if(mode!=Mode.Between||!FirstGiftPending||portal.Busy)return;
+  if(jumping){if(jumpLevel<3)jumpLevel++;else reserveFlares=Mathf.Min(20,reserveFlares+2);}
+  else{if(speedLevel<3)speedLevel++;else reserveFlares=Mathf.Min(20,reserveFlares+2);}
+  PlayerPrefs.SetInt("DS.FirstGiftClaimed",1);PlayerPrefs.SetInt("DS.FirstGiftPending",0);SaveEconomy();
+  portal.Measure("first_reward",jumping?"jump":"speed","claim");
+  portal.ContinueImmediately(()=>{BuildRoom();mode=Mode.Play;CursorState(true);portal.StartPlay();});
+ }
+ float attemptBest;bool attemptTracked;int attemptMilestone;bool jumpHintShown;
+ string AttemptKey=>"DS.Best."+stage+"."+leg;
+ string AttemptSummary(){
+  int reached=Mathf.FloorToInt(attemptBest*100),best=Mathf.Max(reached,PlayerPrefs.GetInt(AttemptKey));
+  string tip=flares+reserveFlares>0?(touchMode?"Tap the flare when the creature gets close.":"Press F to throw a flare near the creature."):"Jump near the edge. Turn back at dead ends.";
+  return "CROSSING REACHED  "+reached+"%"+ "\nPERSONAL BEST  "+best+"%\n"+tip;
+ }
+ void TrackAttempt(string action){portal.Measure("level",(stage*3+leg+1).ToString(),action);}
+ void EndAttempt(bool cleared){
+  if(!attemptTracked)return;
+  attemptTracked=false;
+  PlayerPrefs.SetInt(AttemptKey,Mathf.Max(PlayerPrefs.GetInt(AttemptKey),cleared?100:Mathf.FloorToInt(attemptBest*100)));PlayerPrefs.Save();
+  TrackAttempt(cleared?"complete":"fail");
+ }
+ void TickAttempt(){
+  if(!attemptTracked){attemptTracked=true;TrackAttempt("start");}
+  if(!FirstChamber&&!jumpHintShown&&body.transform.position.z>0&&body.transform.position.z<8){
+   jumpHintShown=true;Notice(touchMode?"Reach the far shore. Tap the arrow to jump.":"Reach the far shore. SPACE to jump.",5);
+  }
+  // Progress counts safe landings, so falling or jumping into water earns nothing.
+  if(!body.isGrounded||wet>0)return;
+  attemptBest=Mathf.Max(attemptBest,Mathf.Clamp01((body.transform.position.z-4)/(EndZ-4)));
+  int milestone=Mathf.Min(3,Mathf.FloorToInt(attemptBest*4));
+  while(attemptMilestone<milestone){
+   attemptMilestone++;portal.Measure("crossing",(stage*3+leg+1)+"."+attemptMilestone,"reach");
+   int earned=RewardOnce("Distance"+attemptMilestone,20);
+   if(earned>0){Notice((attemptMilestone*25)+"% CROSSED   +20 COINS",3);Sfx(clickClip);}
+  }
+ }
  const float WaterY=.10f;
  int lastRoomReward,pebbleSkips;float pebbleTimer;Vector3 pebblePoint,pebbleDirection;
  class BonusCoin {public Transform visual;public string key;public Vector3 home;}
@@ -85,6 +147,7 @@ public sealed partial class SplashGame {
   bonusCoins.Add(new BonusCoin{visual=coin.transform,key=key,home=position});
  }
  void TickEconomy(float dt){
+  TickAttempt();
   if(pebbleSkips>0){
    pebbleTimer-=dt;
    if(pebbleTimer<=0){pebbleTimer=.4f;pebbleSkips--;pebblePoint+=pebbleDirection*1.8f;pebblePoint.x=Mathf.Clamp(pebblePoint.x,-HallWidth+4,HallWidth-4);pebblePoint.z=Mathf.Clamp(pebblePoint.z,5,EndZ-9);Noise(pebblePoint,4);Ripple(pebblePoint);}
@@ -92,7 +155,7 @@ public sealed partial class SplashGame {
   for(int i=bonusCoins.Count-1;i>=0;i--){
    var coin=bonusCoins[i];coin.visual.Rotate(0,0,dt*90,Space.Self);coin.visual.position=coin.home+Vector3.up*Mathf.Sin(simTime*2+i)*.1f;
    if(Vector3.Distance(body.transform.position+Vector3.up*.7f,coin.visual.position)<1){
-    int earned=RewardOnce(coin.key,15);if(earned>0){Notice("SECRET COIN  +15  /  turn back before the dead end");Sfx(clickClip);EmitFX(2,coin.visual.position);}
+    int earned=RewardOnce(coin.key,15);if(earned>0){Notice(coin.key=="TreasureFirstJumps"?"FIRST THREE JUMPS   +15 COINS":"SECRET COIN  +15   Turn back before the dead end");Sfx(clickClip);EmitFX(2,coin.visual.position);}
     Destroy(coin.visual.gameObject);bonusCoins.RemoveAt(i);
    }
   }

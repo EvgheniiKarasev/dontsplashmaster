@@ -8,6 +8,8 @@ namespace DontSplash {
 public sealed partial class SplashGame {
  public GameObject uiButtonPrefab,uiPanelPrefab,uiTitlePrefab;
  public TMP_FontAsset uiBodyFont,uiHeadingFont;
+ TMP_Text pebbleCount,flareCount;RawImage flareIcon;
+ GameObject shopControl;
  Image deathBlackout;Canvas uiCanvas;CanvasScaler uiScaler;RectTransform uiRoot;
  string uiKey="";TMP_Text hudTitle,hudStats,noticeLabel,inventoryLabel,codeLabel,assistLabel,soundLabel,busyLabel;
  GameObject noticePanel,dangerPanel;Image holdFill;Button primaryButton;Rect lastSafe;
@@ -74,7 +76,8 @@ public sealed partial class SplashGame {
  }
  void ContinueUI(){
   if(mode==Mode.Win){StartRun(false);return;}
-  if(mode==Mode.Dead){portal.Break(()=>{stones=Mathf.Max(stones,3);flares=Mathf.Max(flares,1);Respawn();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
+  if(mode==Mode.Dead){portal.Measure("retry",(stage*3+leg+1).ToString(),"click");portal.ContinueImmediately(()=>{stones=Mathf.Max(stones,5);flares=Mathf.Max(flares,2);Respawn();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
+  if(mode==Mode.Between&&FirstGiftPending)return;
   if(mode==Mode.Between){portal.Break(()=>{BuildRoom();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
   Resume();
  }
@@ -92,14 +95,18 @@ public sealed partial class SplashGame {
    if(uiRoot){uiRoot.gameObject.SetActive(false);Destroy(uiRoot.gameObject);}
    var root=new GameObject("Safe area",typeof(RectTransform));uiRoot=root.GetComponent<RectTransform>();
    Position(root,new Rect(safe.x/uiScale,(Screen.height-safe.yMax)/uiScale,uw,uh),uiCanvas.transform);
+   pebbleCount=flareCount=null;flareIcon=null;
    coinLabel=hudTitle=hudStats=noticeLabel=inventoryLabel=codeLabel=assistLabel=soundLabel=busyLabel=null;noticePanel=dangerPanel=null;holdFill=null;primaryButton=null;
    if(mode==Mode.Play)BuildHUD();else if(mode==Mode.Shop)BuildShop();else if(mode!=Mode.Caught)BuildMenu();
   }
+  if(shopControl)shopControl.SetActive(mode==Mode.Play&&NearShop);
   if(coinLabel)coinLabel.text="COINS  "+coins;
-  if(hudTitle)hudTitle.text=(stage+1).ToString("00")+" / "+names[stage];
-  if(hudStats){int count=0;foreach(var valve in valves)if(valve.done)count++;hudStats.text="CHAMBER "+(leg+1)+"/3    VALVES "+count+"/2    "+TimeText();}
-  if(inventoryLabel)inventoryLabel.text=(touchMode?"":"Q  ")+(stones+reserveBottles>0?"BOTTLE "+(stones+reserveBottles):"PEBBLE / FREE")+(touchMode?"     FLARE ":"     F  FLARE ")+(flares+reserveFlares)+(touchMode?"":"     E  USE");
-  if(noticePanel)noticePanel.SetActive(noticeTime>0);if(noticeLabel){noticeLabel.gameObject.SetActive(noticeTime>0);noticeLabel.text=notice;}
+
+  if(hudStats)hudStats.text="<mspace=0.65em>"+TimeText()+"</mspace>";
+  if(pebbleCount)pebbleCount.text=stones+reserveBottles>0?(stones+reserveBottles).ToString():"∞";
+  if(flareCount)flareCount.text=(flares+reserveFlares).ToString();
+  if(flareIcon)flareIcon.color=flares+reserveFlares>0?Color.white:new Color(.45f,.45f,.45f,.65f);
+  if(noticePanel)noticePanel.SetActive(noticeTime>0||JumpHelpVisible);if(noticeLabel){noticeLabel.gameObject.SetActive(noticeTime>0||JumpHelpVisible);noticeLabel.text=JumpHelpVisible?(touchMode?"Jump onto the first platform. Tap the jump button.":"Jump onto the first platform. Press SPACE.") : notice;}
   if(dangerPanel)dangerPanel.SetActive(wet>0);
   if(holdFill){holdFill.rectTransform.sizeDelta=new Vector2(Mathf.Clamp01(hold)*196,10);holdFill.transform.parent.gameObject.SetActive(hold>0);}
   if(codeLabel)codeLabel.text=code.PadRight(4,'_');
@@ -112,15 +119,15 @@ public sealed partial class SplashGame {
   UIPanel(new Rect(0,0,uw,uh),new Color(.055f,.05f,.025f,.88f));
   float x=uw/2-290,y=uh/2-275;
   UIPanel(new Rect(x-25,y-15,630,580),new Color(.2f,.19f,.12f,.97f));
-  Heading(new Rect(x,y+8,580,85),mode==Mode.Menu?"DONT SPLASH":codeOpen?"EMERGENCY EXIT":mode==Mode.Win?"SURFACE REACHED":mode==Mode.Dead?"IT HEARD YOU":mode==Mode.Between?"SECTOR CLEAR":"PAUSED");
+  Heading(new Rect(x,y+8,580,85),mode==Mode.Menu?"DONT SPLASH":codeOpen?"EMERGENCY EXIT":mode==Mode.Win?"SURFACE REACHED":mode==Mode.Dead?"IT HEARD YOU":mode==Mode.Between&&FirstGiftPending?"FIRST CROSSING!":mode==Mode.Between?"SECTOR CLEAR":"PAUSED");
   if(mode==Mode.Menu){
-   UILabel(new Rect(x+20,y+110,540,72),"A blind creature. Twenty-seven flooded chambers.\nKeep the water quiet.",23);
-   UILabel(new Rect(x+20,y+193,540,64),touchMode?"Left thumb: move  /  Right thumb: look\nUse the action buttons to jump, distract and turn valves.":"WASD / arrows: move   Mouse: look   Space: jump\nE: valve   Q: bottle   F: flare   Esc: pause",18);
-   UIButton(new Rect(x+110,y+280,360,65),"ENTER THE POOLROOMS",()=>StartRun(false));
-   if(PlayerPrefs.GetInt("HasSave")==1)UIButton(new Rect(x+110,y+358,360,62),"CONTINUE SAVED RUN",()=>StartRun(true));
-   UIButton(new Rect(x+20,y+435,260,52),"ASSIST",()=>assist=!assist,out assistLabel);
-   UIButton(new Rect(x+300,y+435,260,52),"SOUND",ToggleSound,out soundLabel);
-   UILabel(new Rect(x+20,y+495,540,35),"Assist gives longer jumps and more time to escape the water.",16);
+   UILabel(new Rect(x+20,y+145,540,60),"Keep the water quiet.",26).alignment=TextAlignmentOptions.Center;
+   UIButton(new Rect(x+110,y+410,360,65),"PLAY",()=>StartRun(false));
+  }else if(mode==Mode.Between&&FirstGiftPending){
+   UILabel(new Rect(x+20,y+120,540,85),"Choose a free permanent upgrade.",25).alignment=TextAlignmentOptions.Center;
+   UIButton(new Rect(x+20,y+245,260,75),jumpLevel<3?"HIGHER JUMP":"2 EXTRA FLARES",()=>ClaimFirstGift(true));
+   UIButton(new Rect(x+300,y+245,260,75),speedLevel<3?"FASTER RUN":"2 EXTRA FLARES",()=>ClaimFirstGift(false));
+   UILabel(new Rect(x+20,y+345,540,90),"Next: moving platforms.\nYour choice starts the next chamber.",22).alignment=TextAlignmentOptions.Center;
   }else if(codeOpen){
    UILabel(new Rect(x+20,y+108,540,48),"Emergency code engraved in this chamber: 4173",20);
    codeLabel=UILabel(new Rect(x+20,y+162,540,55),"____",40,true);codeLabel.alignment=TextAlignmentOptions.Center;
@@ -128,22 +135,62 @@ public sealed partial class SplashGame {
    UIButton(new Rect(x+20,y+400,260,60),"CLEAR",()=>code="");
    UIButton(new Rect(x+300,y+400,260,60),"UNLOCK",()=>{if(code=="4173"){codeOpen=false;Finish();}else{code="";codeLabel.color=new Color(1,.4f,.25f);}});
   }else{
-   string text=mode==Mode.Between?"Progress saved. Next:\n"+names[stage]+" / "+(leg+1)+" of 3"+"\nReward: "+lastRoomReward+" coins  /  Wallet: "+coins:mode==Mode.Dead?"The creature followed your splash.\nRetry from your last safe island.":mode==Mode.Win?"You escaped all 27 chambers.\nTime: "+TimeText()+" / Falls: "+deaths:"Progress: "+completed+" / 27 chambers\nTime: "+TimeText()+" / Falls: "+deaths;
-   UILabel(new Rect(x+20,y+120,540,115),text,24);
-   primaryButton=UIButton(new Rect(x+110,y+280,360,70),mode==Mode.Win?"PLAY AGAIN":mode==Mode.Dead?"RETRY CHECKPOINT":mode==Mode.Between?"NEXT CHAMBER":"RESUME",ContinueUI);
-   if((mode==Mode.Pause&&!codeOpen)||mode==Mode.Dead)UIButton(new Rect(x+130,y+490,320,56),"LOBBY / UPGRADES",VisitLobby);
-   busyLabel=UILabel(new Rect(x+20,y+355,540,40),"Returning to the poolrooms...",18);
-   UIButton(new Rect(x+20,y+420,260,60),"SOUND",ToggleSound,out soundLabel);
-   UIButton(new Rect(x+300,y+420,260,60),"MAIN MENU",()=>{if(mode!=Mode.Win)Save();mode=Mode.Menu;AudioListener.pause=false;portal.StopPlay();ambience.Stop();});
+   string text=mode==Mode.Between?"Progress saved. Next:\n"+names[stage]+" / "+(leg+1)+" of 3"+"\nReward: "+lastRoomReward+" coins  /  Wallet: "+coins:mode==Mode.Dead?AttemptSummary():mode==Mode.Win?"You escaped all 27 chambers.\nTime: "+TimeText()+" / Falls: "+deaths:"Progress: "+completed+" / 27 chambers\nTime: "+TimeText()+" / Falls: "+deaths;
+   UILabel(new Rect(x+20,y+120,540,115),text,24).alignment=TextAlignmentOptions.Center;
+   primaryButton=UIButton(new Rect(x+(mode==Mode.Dead?70:110),y+280,mode==Mode.Dead?440:360,mode==Mode.Dead?82:70),mode==Mode.Win?"PLAY AGAIN":mode==Mode.Dead?"RETRY":mode==Mode.Between?"NEXT CHAMBER":"RESUME",ContinueUI);
+   if(mode==Mode.Dead){
+    var face=primaryButton.targetGraphic;
+    if(face)face.color=new Color(1f,.86f,.38f);
+    var outline=primaryButton.gameObject.AddComponent<Outline>();
+    outline.effectColor=new Color(1f,.89f,.48f,.65f);outline.effectDistance=new Vector2(2,-2);
+    var lobby=UIButton(new Rect(x+20,y+465,260,56),"LOBBY",VisitLobby);
+    if(lobby.targetGraphic)lobby.targetGraphic.color=new Color(.56f,.55f,.39f);
+   }else if(mode==Mode.Pause&&!codeOpen)UIButton(new Rect(x+130,y+490,320,56),"LOBBY",VisitLobby);
+   busyLabel=UILabel(new Rect(x+20,y+375,540,40),"Returning to the poolrooms...",18);
+   busyLabel.alignment=TextAlignmentOptions.Center;
+   if(mode!=Mode.Dead)UIButton(new Rect(x+20,y+420,260,60),"SOUND",ToggleSound,out soundLabel);
+   var mainMenu=UIButton(new Rect(x+300,y+(mode==Mode.Dead?465:420),260,mode==Mode.Dead?56:60),"MAIN MENU",()=>{if(mode!=Mode.Win)Save();mode=Mode.Menu;AudioListener.pause=false;portal.StopPlay();ambience.Stop();});
+   if(mode==Mode.Dead&&mainMenu.targetGraphic)mainMenu.targetGraphic.color=new Color(.56f,.55f,.39f);
   }
+ }
+ void BuildInventory(){
+  BuildItemSlot(ThrowRect,"Pebbles","Q",out pebbleCount);
+  flareIcon=BuildItemSlot(FlareRect,"Flare","F",out flareCount);
+  if(touchMode){
+   var hint=UILabel(new Rect(uw/2-110,uh-142,220,28),"Tap item",20);
+   hint.alignment=TextAlignmentOptions.Center;
+  }
+ }
+ RawImage BuildItemSlot(Rect rect,string asset,string key,out TMP_Text count){
+  var panel=UIPanel(rect,new Color(.16f,.15f,.085f,.78f));
+  panel.name=asset+" inventory slot";
+  var icon=new GameObject(asset,typeof(RectTransform),typeof(RawImage));
+  Position(icon,new Rect(8,8,rect.width-16,rect.height-16),panel.transform);
+  var graphic=icon.GetComponent<RawImage>();graphic.texture=Resources.Load<Texture2D>("UI/"+asset);graphic.raycastTarget=false;
+  count=UILabel(new Rect(rect.x+rect.width-35,rect.y+rect.height-29,29,25),"",20,true);
+  count.alignment=TextAlignmentOptions.BottomRight;
+  if(!touchMode){
+   var badge=UIPanel(new Rect(rect.x+4,rect.y+4,26,26),uiMint);
+   var caption=UILabel(new Rect(rect.x+4,rect.y+4,26,26),key,18,true);
+   caption.color=uiInk;caption.alignment=TextAlignmentOptions.Center;
+  }
+  return graphic;
  }
  void ToggleSound(){muted=!muted;AudioListener.volume=muted?0:1;}
  void BuildHUD(){
-  UIPanel(new Rect(18,18,590,92),new Color(.16f,.15f,.085f,.92f));
-  hudTitle=UILabel(new Rect(34,25,550,36),"",25,true);hudStats=UILabel(new Rect(34,65,550,30),"",18);
-  UIButton(new Rect(uw-115,22,95,60),"II",Pause);
+  hudStats=UILabel(new Rect(28,22,160,46),"",32,true);
+  hudStats.alignment=TextAlignmentOptions.Center;hudStats.color=new Color(1f,.94f,.74f);
+  var timerShadow=hudStats.gameObject.AddComponent<Shadow>();
+  timerShadow.effectColor=new Color(.04f,.05f,.025f,.9f);timerShadow.effectDistance=new Vector2(2,-2);
+  var settings=UIButton(new Rect(uw-80,22,60,60),"",Pause);
+  settings.gameObject.name="Settings";
+  var icon=new GameObject("Settings gear",typeof(RectTransform),typeof(RawImage));
+  Position(icon,new Rect(8,8,44,44),settings.transform);
+  var graphic=icon.GetComponent<RawImage>();
+  graphic.texture=Resources.Load<Texture2D>("UI/SettingsGear");
+  graphic.raycastTarget=false;
   coinLabel=UILabel(new Rect(uw-355,25,220,40),"",23,true);
-  UIButton(new Rect(uw-210,87,190,48),"SHOP",()=>OpenShop());
+  shopControl=UIButton(new Rect(uw-210,87,190,48),"SHOP",()=>OpenShop()).gameObject;shopControl.SetActive(NearShop);
   var cross=UILabel(new Rect(uw/2-12,uh/2-20,24,40),"+",24);cross.alignment=TextAlignmentOptions.Center;
   noticePanel=UIPanel(new Rect(uw/2-335,145,670,58),new Color(.16f,.15f,.085f,.93f));
   noticeLabel=UILabel(new Rect(uw/2-315,151,630,46),"",18);noticeLabel.alignment=TextAlignmentOptions.Center;
@@ -151,13 +198,8 @@ public sealed partial class SplashGame {
   var warning=UILabel(new Rect(uw/2-245,uh*.34f+5,490,50),"SPLASH! JUMP BACK TO SAFETY",23,true);warning.transform.SetParent(dangerPanel.transform,true);
   var progress=UIPanel(new Rect(uw/2-100,uh/2+40,200,14),uiInk);
   var fill=new GameObject("Valve progress",typeof(RectTransform),typeof(Image));Position(fill,new Rect(2,2,0,10),progress.transform);holdFill=fill.GetComponent<Image>();holdFill.color=uiMint;holdFill.raycastTarget=false;
-  if(touchMode){
-   BuildTouchControls();
-   inventoryLabel=UILabel(new Rect(25,uh-210,530,35),"",17);
-  }else{
-   UIPanel(new Rect(uw/2-290,uh-68,580,50),new Color(.16f,.15f,.085f,.9f));
-   inventoryLabel=UILabel(new Rect(uw/2-270,uh-60,540,36),"",19);inventoryLabel.alignment=TextAlignmentOptions.Center;
-  }
+  BuildInventory();
+  if(touchMode)BuildTouchControls();
  }
 }
 }
