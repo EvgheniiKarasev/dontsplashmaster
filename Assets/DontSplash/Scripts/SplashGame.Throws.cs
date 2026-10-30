@@ -5,7 +5,7 @@ public sealed partial class SplashGame {
  readonly ThrownItem[] thrown=new ThrownItem[4];
  bool lookReady;float targetYaw,targetPitch,yawVelocity,pitchVelocity;
  // Modest 15% increase over the original input scale; retain short smoothing.
- const float MouseLookSensitivity=.09775f,TouchLookSensitivity=.138f,LookSmoothTime=.055f;
+ const float MouseLookSensitivity=.1124125f,TouchLookSensitivity=.1587f,LookSmoothTime=.055f;
  void UpdateLook(float dt){
   if(!lookReady){targetYaw=yaw;targetPitch=pitch;yawVelocity=pitchVelocity=0;lookReady=true;}
   targetYaw+=look.x;targetPitch=Mathf.Clamp(targetPitch-look.y,-75,75);
