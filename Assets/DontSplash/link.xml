@@ -1,7 +1,7 @@
 <linker>
-  <!-- SDK callbacks are invoked by name from the Poki JavaScript bridge. -->
+  <!-- SDK callbacks are invoked by name from the CrazyGames JavaScript bridge. -->
   <assembly fullname="Assembly-CSharp">
-    <type fullname="PokiUnitySDK" preserve="all"/>
+    <type fullname="CrazyGames.*" preserve="all"/>
   </assembly>
   <!-- CreatePrimitive chooses these native components at runtime; scene dependency
        scanning does not see the sphere/capsule colliders used by procedural objects. -->

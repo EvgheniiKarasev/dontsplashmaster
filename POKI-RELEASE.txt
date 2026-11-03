@@ -1,3 +1,6 @@
+ARCHIVED: historical Poki configuration, superseded by CRAZYGAMES-RELEASE.txt.
+Do not apply these settings to the CrazyGames version.
+
 POKI RELEASE SETTINGS
 Configured for Unity 6000.3 Web. No player build was generated.
 Official checklist: https://developers.poki.com/guide/sdk-unity

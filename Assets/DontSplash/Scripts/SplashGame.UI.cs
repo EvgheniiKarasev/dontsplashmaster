@@ -78,7 +78,7 @@ public sealed partial class SplashGame {
   if(mode==Mode.Win){StartRun(false);return;}
   if(mode==Mode.Dead){portal.Measure("retry",(stage*3+leg+1).ToString(),"click");portal.ContinueImmediately(()=>{stones=Mathf.Max(stones,5);flares=Mathf.Max(flares,2);Respawn();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
   if(mode==Mode.Between&&FirstGiftPending)return;
-  if(mode==Mode.Between){portal.Break(()=>{BuildRoom();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
+  if(mode==Mode.Between){portal.ContinueImmediately(()=>{BuildRoom();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
   Resume();
  }
  float nextUIRefresh; Mode lastUIMode;
@@ -176,7 +176,7 @@ public sealed partial class SplashGame {
   }
   return graphic;
  }
- void ToggleSound(){muted=!muted;AudioListener.volume=muted?0:1;}
+ void ToggleSound(){muted=!muted;portal.SetMuted(muted);}
  void BuildHUD(){
   hudStats=UILabel(new Rect(28,22,160,46),"",32,true);
   hudStats.alignment=TextAlignmentOptions.Center;hudStats.color=new Color(1f,.94f,.74f);

@@ -22,24 +22,24 @@ public sealed partial class SplashGame {
   foreach(var step in steps){
    Vector3 local=step.t.InverseTransformPoint(body.transform.position);
    if(step.home.z>=7&&Mathf.Abs(local.x)<.55f&&Mathf.Abs(local.z)<.55f&&body.transform.position.y>step.t.position.y&&body.transform.position.y<step.t.position.y+.85f){
-    tutorialJumpDone=true;PlayerPrefs.SetInt("DS.JumpLearned",1);PlayerPrefs.Save();portal.Measure("onboarding","first_jump","complete");Notice("Nice jump. Reach the coin ahead.",3);break;
+    tutorialJumpDone=true;GameSave.SetInt("DS.JumpLearned",1);GameSave.Save();portal.Measure("onboarding","first_jump","complete");Notice("Nice jump. Reach the coin ahead.",3);break;
    }
   }
   tutorialJumpLaunched=tutorialAirborne=false;
  }
- bool FirstGiftPending=>PlayerPrefs.GetInt("DS.FirstGiftPending")==1&&PlayerPrefs.GetInt("DS.FirstGiftClaimed")==0;
+ bool FirstGiftPending=>GameSave.GetInt("DS.FirstGiftPending")==1&&GameSave.GetInt("DS.FirstGiftClaimed")==0;
  void ClaimFirstGift(bool jumping){
   if(mode!=Mode.Between||!FirstGiftPending||portal.Busy)return;
   if(jumping){if(jumpLevel<3)jumpLevel++;else reserveFlares=Mathf.Min(20,reserveFlares+2);}
   else{if(speedLevel<3)speedLevel++;else reserveFlares=Mathf.Min(20,reserveFlares+2);}
-  PlayerPrefs.SetInt("DS.FirstGiftClaimed",1);PlayerPrefs.SetInt("DS.FirstGiftPending",0);SaveEconomy();
+  GameSave.SetInt("DS.FirstGiftClaimed",1);GameSave.SetInt("DS.FirstGiftPending",0);SaveEconomy();
   portal.Measure("first_reward",jumping?"jump":"speed","claim");
   portal.ContinueImmediately(()=>{BuildRoom();mode=Mode.Play;CursorState(true);portal.StartPlay();});
  }
  float attemptBest;bool attemptTracked;int attemptMilestone;bool jumpHintShown;
  string AttemptKey=>"DS.Best."+stage+"."+leg;
  string AttemptSummary(){
-  int reached=Mathf.FloorToInt(attemptBest*100),best=Mathf.Max(reached,PlayerPrefs.GetInt(AttemptKey));
+  int reached=Mathf.FloorToInt(attemptBest*100),best=Mathf.Max(reached,GameSave.GetInt(AttemptKey));
   string tip=flares+reserveFlares>0?(touchMode?"Tap the flare when the creature gets close.":"Press F to throw a flare near the creature."):"Jump near the edge. Turn back at dead ends.";
   return "CROSSING REACHED  "+reached+"%"+ "\nPERSONAL BEST  "+best+"%\n"+tip;
  }
@@ -47,7 +47,7 @@ public sealed partial class SplashGame {
  void EndAttempt(bool cleared){
   if(!attemptTracked)return;
   attemptTracked=false;
-  PlayerPrefs.SetInt(AttemptKey,Mathf.Max(PlayerPrefs.GetInt(AttemptKey),cleared?100:Mathf.FloorToInt(attemptBest*100)));PlayerPrefs.Save();
+  GameSave.SetInt(AttemptKey,Mathf.Max(GameSave.GetInt(AttemptKey),cleared?100:Mathf.FloorToInt(attemptBest*100)));GameSave.Save();
   TrackAttempt(cleared?"complete":"fail");
  }
  void TickAttempt(){
@@ -79,20 +79,20 @@ public sealed partial class SplashGame {
  float JumpSpeed=>(assist?9.5f:8.7f)*(1+jumpLevel*.03f);
  bool InLobby=>body&&body.transform.position.z<-7;
  void LoadEconomy(){
-  coins=Mathf.Max(0,PlayerPrefs.GetInt("DS.Coins",80));
-  reserveFlares=Mathf.Clamp(PlayerPrefs.GetInt("DS.Flares"),0,20);reserveBottles=Mathf.Clamp(PlayerPrefs.GetInt("DS.Bottles"),0,30);
-  speedLevel=Mathf.Clamp(PlayerPrefs.GetInt("DS.Speed"),0,3);jumpLevel=Mathf.Clamp(PlayerPrefs.GetInt("DS.Jump"),0,3);
-  rangeLevel=Mathf.Clamp(PlayerPrefs.GetInt("DS.Range"),0,3);flareLevel=Mathf.Clamp(PlayerPrefs.GetInt("DS.FlarePower"),0,3);
+  coins=Mathf.Max(0,GameSave.GetInt("DS.Coins",80));
+  reserveFlares=Mathf.Clamp(GameSave.GetInt("DS.Flares"),0,20);reserveBottles=Mathf.Clamp(GameSave.GetInt("DS.Bottles"),0,30);
+  speedLevel=Mathf.Clamp(GameSave.GetInt("DS.Speed"),0,3);jumpLevel=Mathf.Clamp(GameSave.GetInt("DS.Jump"),0,3);
+  rangeLevel=Mathf.Clamp(GameSave.GetInt("DS.Range"),0,3);flareLevel=Mathf.Clamp(GameSave.GetInt("DS.FlarePower"),0,3);
   SaveEconomy();
  }
  void SaveEconomy(){
-  PlayerPrefs.SetInt("DS.Coins",coins);PlayerPrefs.SetInt("DS.Flares",reserveFlares);PlayerPrefs.SetInt("DS.Bottles",reserveBottles);
-  PlayerPrefs.SetInt("DS.Speed",speedLevel);PlayerPrefs.SetInt("DS.Jump",jumpLevel);PlayerPrefs.SetInt("DS.Range",rangeLevel);PlayerPrefs.SetInt("DS.FlarePower",flareLevel);PlayerPrefs.Save();
+  GameSave.SetInt("DS.Coins",coins);GameSave.SetInt("DS.Flares",reserveFlares);GameSave.SetInt("DS.Bottles",reserveBottles);
+  GameSave.SetInt("DS.Speed",speedLevel);GameSave.SetInt("DS.Jump",jumpLevel);GameSave.SetInt("DS.Range",rangeLevel);GameSave.SetInt("DS.FlarePower",flareLevel);GameSave.Save();
  }
  int RewardOnce(string award,int amount){
   string key="DS.Reward."+stage+"."+leg+"."+award;
-  if(PlayerPrefs.GetInt(key)==1)return 0;
-  PlayerPrefs.SetInt(key,1);coins+=amount;SaveEconomy();return amount;
+  if(GameSave.GetInt(key)==1)return 0;
+  GameSave.SetInt(key,1);coins+=amount;SaveEconomy();return amount;
  }
  void RewardCheckpoint(){
   int earned=RewardOnce("CP"+checkpointIndex,40);
@@ -141,7 +141,7 @@ public sealed partial class SplashGame {
  }
  void PlaceBonusCoin(Vector3 position,string id){
   string key="Treasure"+id;
-  if(PlayerPrefs.GetInt("DS.Reward."+stage+"."+leg+"."+key)==1)return;
+  if(GameSave.GetInt("DS.Reward."+stage+"."+leg+"."+key)==1)return;
   var coin=Shape("Bonus coin / optional dead end",position,new Vector3(.5f,.075f,.5f),brass,false,PrimitiveType.Cylinder);
   coin.transform.rotation=Quaternion.Euler(90,0,0);
   bonusCoins.Add(new BonusCoin{visual=coin.transform,key=key,home=position});

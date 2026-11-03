@@ -1,0 +1,59 @@
+DONT SPLASH - CRAZYGAMES
+
+Build: Dont Splash > Build CrazyGames release
+Output: Build/CrazyGames. Upload the entire folder as a Unity game in the developer portal.
+Apply settings only: Dont Splash > Apply CrazyGames release settings (no build).
+The release command preserves the current scene; the old Build Web demo command regenerates it.
+Optional device-specific optimized builds: CrazySDK > Build (imported SDK tool).
+
+Submission settings
+- Engine: Unity. Landscape. Enable mobile only after testing actual devices.
+- Progress Save: SDK Data module, not Automatic PlayerPrefs Sync.
+- SDK Data stores guests locally and logged-in players in their CrazyGames account.
+- Old Poki-hosted progress cannot be read from the CrazyGames origin.
+- Existing local editor PlayerPrefs remain available in Editor/native fallback.
+- First release: no ad requests. NEXT CHAMBER immediately starts the next room.
+- There are no rewarded-ad offers, purchases, custom user accounts, or external links.
+- SDK sitelock is retained. Local browser tests must use localhost, not file://.
+- Brotli files require Content-Encoding: br on a local test server. CrazyGames handles hosting.
+
+Integration
+- Initialization precedes all save reads. Slow initialization shows connection status.
+- No local/cloud switching while a session is running.
+- Account login returns to the menu and reloads the account economy before further play.
+- Gameplay events cover play, retry, pause, shop, next room, death, completion and main menu.
+- Room transitions are synchronous user actions; browser pointer lock is requested on the click.
+- Platform audio mute overrides the player's toggle, including changes between rooms.
+- SDK device detection includes tablets; touch input also activates on actual touch.
+- HappyTime is used only after completing all chambers.
+- Arbitrary legacy measurement calls are editor diagnostics only (no equivalent SDK event).
+- Unity host handles loading events. No unsupported Unity loadingStart/Stop calls.
+- link.xml preserves CrazyGames JS callbacks plus procedural primitive types under High stripping.
+
+Validation
+- Runtime scripts compiled against this project's Unity/package references.
+- Editor/build scripts compiled against this project's Unity/package references.
+- Dependency-isolated portal/save regression harness: 17 checks passed.
+  Includes delayed initialization, duplicate gameplay events, ad-free immediate continuation,
+  platform/user mute, account listener cleanup and cloud/native save isolation.
+- These checks do not replace an actual WebGL build and CrazyGames preview validation.
+- Separate Unity batch validation could not open the project because its lock is held
+  by the existing editor. No existing editor or build was terminated.
+
+Still to validate in CrazyGames preview
+1. Initial start and saved progress after reload (guest and signed-in user).
+2. Login during a run: return to menu, no guest economy overwriting account progress.
+3. Gameplay event sequence: start/pause/resume/shop/death/retry/next room/win.
+4. NEXT CHAMBER: no ad requests, no extra resume screen; input, sound and cursor work.
+5. Platform mute and in-game mute before/after changing rooms.
+6. Tab switch, Escape, resizing, phone/tablet safe areas and touch controls.
+7. Initial download <=50 MB (<=20 MB for mobile homepage), total <=250 MB, <=1500 files.
+8. Actual device performance, peak memory and stripped WebGL startup.
+
+References checked 2026-11-03
+https://docs.crazygames.com/sdk/intro/
+https://docs.crazygames.com/sdk/game/
+https://docs.crazygames.com/sdk/video-ads/
+https://docs.crazygames.com/sdk/data/
+https://docs.crazygames.com/requirements/technical/
+https://docs.crazygames.com/resources/unity-custom-build/
