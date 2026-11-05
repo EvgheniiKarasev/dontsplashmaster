@@ -8,13 +8,14 @@ public static class DemoSetup {
  [InitializeOnLoadMethod] static void PrepareOnReload(){
   EditorApplication.playModeStateChanged-=AfterPlay;EditorApplication.playModeStateChanged+=AfterPlay;
   EditorApplication.delayCall+=()=>{
-   if(EditorApplication.isPlayingOrWillChangePlaymode)return;
+   if(BuildPipeline.isBuildingPlayer||Application.isPlaying||EditorApplication.isPlayingOrWillChangePlaymode)return;
    PrepareScene();
   };
  }
- static void AfterPlay(PlayModeStateChange state){if(state==PlayModeStateChange.EnteredEditMode)PrepareScene();}
+ static void AfterPlay(PlayModeStateChange state){if(state==PlayModeStateChange.EnteredEditMode)EditorApplication.delayCall+=PrepareScene;}
  [MenuItem("Dont Splash/Prepare demo")]
  public static void PrepareScene(){
+  if(BuildPipeline.isBuildingPlayer||Application.isPlaying||EditorApplication.isPlayingOrWillChangePlaymode)return;
   if(!File.Exists("Assets/TextMesh Pro/Resources/TMP Settings.asset")){var package=UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(TMPro.TMP_Text).Assembly);if(package!=null){string essentials=Path.Combine(package.resolvedPath,"Package Resources/TMP Essential Resources.unitypackage");if(File.Exists(essentials)){AssetDatabase.ImportPackage(essentials,false);return;}}}
   const string path="Assets/Scenes/DontSplash.unity";
   if(!File.Exists(path)){Create();return;}
@@ -126,7 +127,7 @@ public static class DemoSetup {
    importer.maxTextureSize=1024;importer.textureCompression=TextureImporterCompression.Compressed;
    importer.crunchedCompression=importer.textureType!=TextureImporterType.Lightmap;importer.compressionQuality=65;importer.SaveAndReimport();
   }
-  PokiReleaseSettings.Apply();
+  PlayerSettings.WebGL.template="APPLICATION:Default";
   var report=BuildPipeline.BuildPlayer(EditorBuildSettings.scenes,"Build/Web",BuildTarget.WebGL,BuildOptions.None);
   Debug.Log("WEB_RESULT: "+report.summary.result+"; bytes: "+report.summary.totalSize);
   if(report.summary.result!=BuildResult.Succeeded)throw new System.Exception("Web build failed");

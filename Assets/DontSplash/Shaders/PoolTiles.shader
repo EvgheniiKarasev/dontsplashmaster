@@ -6,16 +6,17 @@ Shader "DontSplash/PoolTiles" {
  #pragma vertex vert
  #pragma fragment frag
  #pragma multi_compile_fog
+ #pragma multi_compile_instancing
  #pragma multi_compile _ LIGHTMAP_ON
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
  CBUFFER_START(UnityPerMaterial)
  half4 _BaseColor;
  CBUFFER_END
- struct A {float4 p:POSITION;float3 n:NORMAL;float2 lm:TEXCOORD1;};
- struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;half3 n:TEXCOORD1;half fog:TEXCOORD2;float2 lm:TEXCOORD3;};
- V vert(A i){V o;o.world=TransformObjectToWorld(i.p.xyz);o.p=TransformWorldToHClip(o.world);o.n=TransformObjectToWorldNormal(i.n);o.fog=ComputeFogFactor(o.p.z);o.lm=i.lm*unity_LightmapST.xy+unity_LightmapST.zw;return o;}
- half4 frag(V i):SV_Target{
+ struct A {float4 p:POSITION;float3 n:NORMAL;float2 lm:TEXCOORD1; UNITY_VERTEX_INPUT_INSTANCE_ID};
+ struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;half3 n:TEXCOORD1;half fog:TEXCOORD2;float2 lm:TEXCOORD3; UNITY_VERTEX_OUTPUT_STEREO};
+ V vert(A i){V o;UNITY_SETUP_INSTANCE_ID(i);UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);o.world=TransformObjectToWorld(i.p.xyz);o.p=TransformWorldToHClip(o.world);o.n=TransformObjectToWorldNormal(i.n);o.fog=ComputeFogFactor(o.p.z);o.lm=i.lm*unity_LightmapST.xy+unity_LightmapST.zw;return o;}
+ half4 frag(V i):SV_Target{UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
   half3 n=normalize(i.n);float3 a=abs(n);
   float2 uv=(a.y>a.x&&a.y>a.z)?i.world.xz:(a.x>a.z?i.world.zy:i.world.xy);
   uv*=2.5;float2 cell=frac(uv);float2 edge=min(cell,1-cell);float2 aa=max(fwidth(uv),.001);
@@ -45,7 +46,10 @@ Shader "DontSplash/PoolTiles" {
  #pragma vertex vert
  #pragma fragment frag
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
- float4 vert(float4 p:POSITION):SV_POSITION{return TransformObjectToHClip(p.xyz);}
+ #pragma multi_compile_instancing
+ struct DA {float4 p:POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID};
+ struct DV {float4 p:SV_POSITION; UNITY_VERTEX_OUTPUT_STEREO};
+ DV vert(DA i){DV o;UNITY_SETUP_INSTANCE_ID(i);UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);o.p=TransformObjectToHClip(i.p.xyz);return o;}
  half4 frag():SV_Target{return 0;}
  ENDHLSL
  }

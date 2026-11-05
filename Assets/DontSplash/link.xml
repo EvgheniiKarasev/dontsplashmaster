@@ -1,8 +1,4 @@
 <linker>
-  <!-- SDK callbacks are invoked by name from the Poki JavaScript bridge. -->
-  <assembly fullname="Assembly-CSharp">
-    <type fullname="PokiUnitySDK" preserve="all"/>
-  </assembly>
   <!-- CreatePrimitive chooses these native components at runtime; scene dependency
        scanning does not see the sphere/capsule colliders used by procedural objects. -->
   <assembly fullname="UnityEngine.PhysicsModule">

@@ -7,14 +7,15 @@ Shader "DontSplash/PoolWater" {
    #pragma vertex vert
    #pragma fragment frag
    #pragma multi_compile_fog
+ #pragma multi_compile_instancing
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
    CBUFFER_START(UnityPerMaterial)
    half4 _BaseColor; half4 _MistColor; float _FogNear; float _FogFar;
    CBUFFER_END
-   struct A {float4 positionOS:POSITION;};
-   struct V {float4 positionCS:SV_POSITION; float3 world:TEXCOORD0; half fog:TEXCOORD1;};
-   V vert(A i){V o;o.world=TransformObjectToWorld(i.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.world);o.fog=ComputeFogFactor(o.positionCS.z);return o;}
-   half4 frag(V i):SV_Target {
+   struct A {float4 positionOS:POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID};
+   struct V {float4 positionCS:SV_POSITION; float3 world:TEXCOORD0; half fog:TEXCOORD1; UNITY_VERTEX_OUTPUT_STEREO};
+   V vert(A i){V o;UNITY_SETUP_INSTANCE_ID(i);UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);o.world=TransformObjectToWorld(i.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.world);o.fog=ComputeFogFactor(o.positionCS.z);return o;}
+   half4 frag(V i):SV_Target{UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
     float2 p=i.world.xz;
     float t=_Time.y*.45;
     float a=sin(p.x*2.8+p.y*1.4+t), b=sin(p.y*3.2-p.x*.7-t*1.3);

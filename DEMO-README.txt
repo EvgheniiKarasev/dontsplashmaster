@@ -16,28 +16,20 @@ Blind creature patrols independently and investigates the most recent sound.
 Bottles redirect it; flares stun it for five seconds. Water allows a short escape.
 Target first-play duration: approximately 20 minutes; not a timed lock or a measured guarantee.
 
-Poki
-Uses the official user-supplied PokiUnitySDK, plugin and template.
-Loading finished, gameplay start/stop and commercial breaks are connected.
-Gameplay and audio are suspended during ads; continue only on the SDK callback.
-No rewarded ads or purchases are offered.
-Official reference: https://developers.poki.com/guide/sdk-unity
+Web build
+Dont Splash > Build Web demo uses the built-in Unity template.
+There are no advertising callbacks or portal analytics.
 
-Web build (not executed, per request)
-Dont Splash > Build Web demo creates Build/Web and a size report.
-This uses the Poki template, high managed stripping, engine stripping,
-1024-pixel compressed referenced textures, no shadows and no WebGL compression
-(the current Poki guide recommends server-side compression).
-Build function fails if all delivered files exceed 50,000,000 bytes.
-Actual build size, real mobile performance and Poki Inspector event flow
-remain to be checked with a Web build.
+Meta Quest
+Dont Splash > VR > Build Quest APK creates Builds/Quest/DontSplash-Quest.apk.
+See Builds/Quest/Readme.txt for controller bindings and headset checks.
 
 Scope
 Single-player; no multiplayer or paid progression.
 The third-person character/UI asset packs and portal VFX are not required by
 this first-person demo. The supplied monster and bottle models are used.
 
-Visual update: nine architectural palettes, arcade/ruin/reservoir/pump/machine/service spaces; supplied cooler, first-aid kit, radio, barrel and emergency-button props. Linear mist hides geometry by 22–37 metres; labels and water fade into the same mist. Editor-only Poki ad callback workaround prevents transitions from hanging in Play Mode.
+Visual update: nine architectural palettes, arcade/ruin/reservoir/pump/machine/service spaces; supplied cooler, first-aid kit, radio, barrel and emergency-button props. Linear mist hides geometry by 22–37 metres; labels and water fade into the same mist.
 
 Creature update: native Monster 10 Attack 1 clip, procedural spine/neck idle and listening, spatial breathing/growl/water footsteps, telegraphed attack with impact at 0.48 seconds, flare interruption and camera impact. No audio files were present in the imported assets; five lightweight mono clips are synthesized once in memory. No build was run.
 Monster Play Mode validation: 24 checks passed; report Logs/CreaturePlayProbe.txt. Fixed false impact sounds on misses, footsteps while stationary, and reaction timers after respawn. Temporary QA scripts removed. Sound sources and PCM validated; subjective listening not performed. No build.

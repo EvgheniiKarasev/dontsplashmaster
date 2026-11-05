@@ -9,5 +9,8 @@ EditorBuildSettings:
     path: Assets/Scenes/DontSplash.unity
     guid: 43d5f95504a23a240a7e1bbe63552fc1
   m_configObjects:
+    Unity.XR.Oculus.Settings: {fileID: 11400000, guid: dabde8c5506e3a84b946e0775f5ab3dd, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 7ae8f90d845b4274595d2faa5d1cd975, type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 8cfff895e410d424d946acb1d072fe14, type: 2}
   m_UseUCBPForAssetBundles: 0

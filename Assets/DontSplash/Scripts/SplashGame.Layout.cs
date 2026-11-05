@@ -143,12 +143,13 @@ public sealed partial class SplashGame {
   Vector3 position=body.transform.position;
   if(body.isGrounded&&Mathf.Abs(position.x)<2.2f&&position.z>=1.5f&&position.z<=4.2f){
    shoreGuideReached=true;shoreGuide.SetActive(false);
-   portal.Measure("onboarding","jump_edge","reach");
+
   }
  }
  bool creatureRevealed,catchStrikeStarted,catchHit;float catchClock,catchFadeStarted;
  float CatchBlackout=>catchHit?Mathf.SmoothStep(0,1,(catchClock-catchFadeStarted)/.65f):0;Vector3 catchStart;Quaternion catchRotation;
  Vector3 patrolCenter;float pursuit;
+ Vector3 vrCatchDirection;
  void ParkCreature(){creatureRevealed=true;pursuit=0;patrolCenter=new Vector3(0,WaterY-.6f,EndZ*.5f);monster.position=patrolCenter;}
  void RevealCreature(Vector3 noise){
   if(creatureRevealed||!monster)return;
@@ -192,10 +193,25 @@ public sealed partial class SplashGame {
   monster.position=body.transform.position+direction*CreatureStandOff;monster.position=new Vector3(monster.position.x,WaterY-.6f,monster.position.z);
   monster.rotation=Quaternion.LookRotation(-direction);
   creature.ResetPose();creature.Hear();CursorState(true);
+  if(vr){
+   vrCatchDirection=Vector3.ProjectOnPlane(eye.transform.forward,Vector3.up).normalized;
+   if(vrCatchDirection.sqrMagnitude<.01f)vrCatchDirection=body.transform.forward;
+   AlignVRCatch();
+  }
  }
- void TickCatch(){
-  if(portal.Busy)return;
-  float dt=Time.deltaTime;catchClock+=dt;
+ void AlignVRCatch(){
+  Vector3 head=eye.transform.position;
+  monster.rotation=Quaternion.LookRotation(-vrCatchDirection,Vector3.up);
+  float approach=catchStrikeStarted?Mathf.SmoothStep(0,1,creature.StrikeProgress):0;
+  Vector3 faceTarget=head+vrCatchDirection*Mathf.Lerp(1.25f,.95f,approach);
+  // Correct the sampled pose, including its vertical and sideways root motion.
+  // The player keeps control of their head throughout the sequence.
+  monster.position+=faceTarget-creature.FacePosition;
+  creature.AimAtVictim(head,catchStrikeStarted);
+ }
+ void TickCatch()=>StepCatch(Time.deltaTime);
+ void StepCatch(float dt){
+  catchClock+=dt;
   float inspectDuration=deaths==0?2f:1.3f;
   if(!catchStrikeStarted&&catchClock>=inspectDuration){catchStrikeStarted=true;creature.BeginAttack();}
   bool impact=false;
@@ -206,6 +222,8 @@ public sealed partial class SplashGame {
   if(!catchHit&&(impact||catchClock>=inspectDuration+.85f)){
    catchHit=true;catchFadeStarted=catchClock;creature.PlayImpact();
   }
+  if(vr)AlignVRCatch();
+  if(!vr){
   Vector3 face=creature.FacePosition;
   Vector3 cameraPosition=face+monster.forward*1.25f+Vector3.up*.08f;
   float t=Mathf.SmoothStep(0,1,catchClock/.16f);
@@ -217,7 +235,8 @@ public sealed partial class SplashGame {
    eye.transform.position-=eye.transform.forward*.12f*recoil;
    eye.transform.rotation*=Quaternion.Euler(-5*recoil,0,3*recoil);
   }
-  if(catchHit&&catchClock-catchFadeStarted>=.65f){deaths++;mode=Mode.Dead;portal.StopPlay();CursorState(false);}
+  }
+  if(catchHit&&catchClock-catchFadeStarted>=.65f){deaths++;mode=Mode.Dead;CursorState(false);}
  }
 }
 }

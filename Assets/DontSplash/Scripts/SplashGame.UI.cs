@@ -11,7 +11,7 @@ public sealed partial class SplashGame {
  TMP_Text pebbleCount,flareCount;RawImage flareIcon;
  GameObject shopControl;
  Image deathBlackout;Canvas uiCanvas;CanvasScaler uiScaler;RectTransform uiRoot;
- string uiKey="";TMP_Text hudTitle,hudStats,noticeLabel,inventoryLabel,codeLabel,assistLabel,soundLabel,busyLabel;
+ string uiKey="";TMP_Text hudTitle,hudStats,noticeLabel,inventoryLabel,codeLabel,assistLabel,soundLabel;
  GameObject noticePanel,dangerPanel;Image holdFill;Button primaryButton;Rect lastSafe;
  readonly Color uiMint=new Color(.83f,.78f,.51f),uiInk=new Color(.12f,.11f,.065f);
  void InitializeUI(){
@@ -23,7 +23,7 @@ public sealed partial class SplashGame {
   var rect=blackout.GetComponent<RectTransform>();rect.SetParent(uiCanvas.transform,false);
   rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=rect.offsetMax=Vector2.zero;
   deathBlackout=blackout.GetComponent<Image>();deathBlackout.color=Color.clear;deathBlackout.raycastTarget=false;
-  SyncUI();
+  ConfigureVRCanvas();SyncUI();
  }
  RectTransform Position(GameObject go,Rect r,Transform parent=null){
   var rt=go.GetComponent<RectTransform>();if(!rt)rt=go.AddComponent<RectTransform>();
@@ -60,7 +60,7 @@ public sealed partial class SplashGame {
   var colors=button.colors;colors.normalColor=Color.white;colors.highlightedColor=new Color(1.08f,1.08f,1.08f);
   colors.pressedColor=new Color(.78f,.78f,.78f);colors.disabledColor=new Color(.5f,.5f,.5f);colors.fadeDuration=.1f;button.colors=colors;
   button.enabled=action!=null;
-  if(action!=null)button.onClick.AddListener(()=>{if(portal.Busy)return;Sfx(clickClip);action();});
+  if(action!=null)button.onClick.AddListener(()=>{Sfx(clickClip);action();});
   caption=UILabel(new Rect(r.x+12,r.y+4,r.width-24,r.height-8),text,21);caption.alignment=TextAlignmentOptions.Center;caption.color=uiInk;
   caption.transform.SetParent(go.transform,true);
   caption.textWrappingMode=TextWrappingModes.NoWrap;caption.overflowMode=TextOverflowModes.Ellipsis;
@@ -76,9 +76,9 @@ public sealed partial class SplashGame {
  }
  void ContinueUI(){
   if(mode==Mode.Win){StartRun(false);return;}
-  if(mode==Mode.Dead){portal.Measure("retry",(stage*3+leg+1).ToString(),"click");portal.ContinueImmediately(()=>{stones=Mathf.Max(stones,5);flares=Mathf.Max(flares,2);Respawn();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
+  if(mode==Mode.Dead){ContinueGame(()=>{stones=Mathf.Max(stones,5);flares=Mathf.Max(flares,2);Respawn();mode=Mode.Play;CursorState(true);});return;}
   if(mode==Mode.Between&&FirstGiftPending)return;
-  if(mode==Mode.Between){portal.Break(()=>{BuildRoom();mode=Mode.Play;CursorState(true);portal.StartPlay();});return;}
+  if(mode==Mode.Between){ContinueGame(()=>{BuildRoom();mode=Mode.Play;CursorState(true);});return;}
   Resume();
  }
  float nextUIRefresh; Mode lastUIMode;
@@ -88,32 +88,32 @@ public sealed partial class SplashGame {
   if(!uiCanvas)return;
   // Covers the whole display, including outside the safe area; menus render above it.
   if(deathBlackout)deathBlackout.color=new Color(0,0,0,mode==Mode.Dead?1:mode==Mode.Caught?CatchBlackout:0);
-  Rect safe=Screen.safeArea;uiScale=Mathf.Max(.1f,Mathf.Min(safe.width/1000f,safe.height/650f));uw=safe.width/uiScale;uh=safe.height/uiScale;
+  Rect safe=vr?new Rect(0,0,1000,650):Screen.safeArea;uiScale=Mathf.Max(.1f,Mathf.Min(safe.width/1000f,safe.height/650f));uw=safe.width/uiScale;uh=safe.height/uiScale;
   string key=mode+"/"+codeOpen+"/"+touchMode+"/"+Screen.width+"/"+Screen.height+"/"+safe;
   if(key!=uiKey){
    uiKey=key;lastSafe=safe;uiScaler.scaleFactor=uiScale;
    if(uiRoot){uiRoot.gameObject.SetActive(false);Destroy(uiRoot.gameObject);}
    var root=new GameObject("Safe area",typeof(RectTransform));uiRoot=root.GetComponent<RectTransform>();
-   Position(root,new Rect(safe.x/uiScale,(Screen.height-safe.yMax)/uiScale,uw,uh),uiCanvas.transform);
+   Position(root,new Rect(safe.x/uiScale,(vr?0:Screen.height-safe.yMax)/uiScale,uw,uh),uiCanvas.transform);
    pebbleCount=flareCount=null;flareIcon=null;
-   coinLabel=hudTitle=hudStats=noticeLabel=inventoryLabel=codeLabel=assistLabel=soundLabel=busyLabel=null;noticePanel=dangerPanel=null;holdFill=null;primaryButton=null;
-   if(mode==Mode.Play)BuildHUD();else if(mode==Mode.Shop)BuildShop();else if(mode!=Mode.Caught)BuildMenu();
+   coinLabel=hudTitle=hudStats=noticeLabel=inventoryLabel=codeLabel=assistLabel=soundLabel=null;noticePanel=dangerPanel=null;holdFill=null;primaryButton=null;
+   if(mode==Mode.Play)BuildHUD();else if(mode==Mode.Shop)BuildShop();else if(mode!=Mode.Caught)BuildMenu();RefreshVRUI();
   }
-  if(shopControl)shopControl.SetActive(mode==Mode.Play&&NearShop);
+  if(shopControl)shopControl.SetActive(!vr&&mode==Mode.Play&&NearShop);
   if(coinLabel)coinLabel.text="COINS  "+coins;
 
   if(hudStats)hudStats.text="<mspace=0.65em>"+TimeText()+"</mspace>";
   if(pebbleCount)pebbleCount.text=stones+reserveBottles>0?(stones+reserveBottles).ToString():"∞";
   if(flareCount)flareCount.text=(flares+reserveFlares).ToString();
   if(flareIcon)flareIcon.color=flares+reserveFlares>0?Color.white:new Color(.45f,.45f,.45f,.65f);
-  if(noticePanel)noticePanel.SetActive(noticeTime>0||JumpHelpVisible);if(noticeLabel){noticeLabel.gameObject.SetActive(noticeTime>0||JumpHelpVisible);noticeLabel.text=JumpHelpVisible?(touchMode?"Jump onto the first platform. Tap the jump button.":"Jump onto the first platform. Press SPACE.") : notice;}
+  if(noticePanel)noticePanel.SetActive(noticeTime>0||JumpHelpVisible||(vr&&NearShop));if(noticeLabel){noticeLabel.gameObject.SetActive(noticeTime>0||JumpHelpVisible||(vr&&NearShop));noticeLabel.text=vr&&NearShop?"HOLD LEFT GRIP TO OPEN SHOP":JumpHelpVisible?(vr?"Jump onto the first platform. Press A.":touchMode?"Jump onto the first platform. Tap the jump button.":"Jump onto the first platform. Press SPACE.") : notice;}
   if(dangerPanel)dangerPanel.SetActive(wet>0);
   if(holdFill){holdFill.rectTransform.sizeDelta=new Vector2(Mathf.Clamp01(hold)*196,10);holdFill.transform.parent.gameObject.SetActive(hold>0);}
   if(codeLabel)codeLabel.text=code.PadRight(4,'_');
   if(assistLabel)assistLabel.text=assist?"ASSIST: ON":"ASSIST: OFF";
   if(soundLabel)soundLabel.text=muted?"SOUND: OFF":"SOUND: ON";
-  if(primaryButton)primaryButton.interactable=!portal.Busy;
-  if(busyLabel)busyLabel.gameObject.SetActive(portal.Busy);
+
+
  }
  void BuildMenu(){
   UIPanel(new Rect(0,0,uw,uh),new Color(.055f,.05f,.025f,.88f));
@@ -121,7 +121,7 @@ public sealed partial class SplashGame {
   UIPanel(new Rect(x-25,y-15,630,580),new Color(.2f,.19f,.12f,.97f));
   Heading(new Rect(x,y+8,580,85),mode==Mode.Menu?"DONT SPLASH":codeOpen?"EMERGENCY EXIT":mode==Mode.Win?"SURFACE REACHED":mode==Mode.Dead?"IT HEARD YOU":mode==Mode.Between&&FirstGiftPending?"FIRST CROSSING!":mode==Mode.Between?"SECTOR CLEAR":"PAUSED");
   if(mode==Mode.Menu){
-   UILabel(new Rect(x+20,y+145,540,60),"Keep the water quiet.",26).alignment=TextAlignmentOptions.Center;
+   UILabel(new Rect(x+20,y+145,540,vr?120:60),vr?"LEFT STICK: move   RIGHT STICK: snap turn\nA: jump   B: pause   X: bring menu here\nHOLD TRIGGER: right bottle / left flare\nSwing + release to throw   LEFT GRIP: use":"Keep the water quiet.",vr?20:26).alignment=TextAlignmentOptions.Center;
    UIButton(new Rect(x+110,y+410,360,65),"PLAY",()=>StartRun(false));
   }else if(mode==Mode.Between&&FirstGiftPending){
    UILabel(new Rect(x+20,y+120,540,85),"Choose a free permanent upgrade.",25).alignment=TextAlignmentOptions.Center;
@@ -146,16 +146,14 @@ public sealed partial class SplashGame {
     var lobby=UIButton(new Rect(x+20,y+465,260,56),"LOBBY",VisitLobby);
     if(lobby.targetGraphic)lobby.targetGraphic.color=new Color(.56f,.55f,.39f);
    }else if(mode==Mode.Pause&&!codeOpen)UIButton(new Rect(x+130,y+490,320,56),"LOBBY",VisitLobby);
-   busyLabel=UILabel(new Rect(x+20,y+375,540,40),"Returning to the poolrooms...",18);
-   busyLabel.alignment=TextAlignmentOptions.Center;
    if(mode!=Mode.Dead)UIButton(new Rect(x+20,y+420,260,60),"SOUND",ToggleSound,out soundLabel);
-   var mainMenu=UIButton(new Rect(x+300,y+(mode==Mode.Dead?465:420),260,mode==Mode.Dead?56:60),"MAIN MENU",()=>{if(mode!=Mode.Win)Save();mode=Mode.Menu;AudioListener.pause=false;portal.StopPlay();ambience.Stop();});
+   var mainMenu=UIButton(new Rect(x+300,y+(mode==Mode.Dead?465:420),260,mode==Mode.Dead?56:60),"MAIN MENU",()=>{if(mode!=Mode.Win)Save();mode=Mode.Menu;AudioListener.pause=false;ambience.Stop();});
    if(mode==Mode.Dead&&mainMenu.targetGraphic)mainMenu.targetGraphic.color=new Color(.56f,.55f,.39f);
   }
  }
  void BuildInventory(){
-  BuildItemSlot(ThrowRect,"Pebbles","Q",out pebbleCount);
-  flareIcon=BuildItemSlot(FlareRect,"Flare","F",out flareCount);
+  BuildItemSlot(ThrowRect,"Pebbles",vr?"RT":"Q",out pebbleCount);
+  flareIcon=BuildItemSlot(FlareRect,"Flare",vr?"LT":"F",out flareCount);
   if(touchMode){
    var hint=UILabel(new Rect(uw/2-110,uh-142,220,28),"Tap item",20);
    hint.alignment=TextAlignmentOptions.Center;
@@ -167,7 +165,7 @@ public sealed partial class SplashGame {
   var icon=new GameObject(asset,typeof(RectTransform),typeof(RawImage));
   Position(icon,new Rect(8,8,rect.width-16,rect.height-16),panel.transform);
   var graphic=icon.GetComponent<RawImage>();graphic.texture=Resources.Load<Texture2D>("UI/"+asset);graphic.raycastTarget=false;
-  count=UILabel(new Rect(rect.x+rect.width-35,rect.y+rect.height-29,29,25),"",20,true);
+  count=UILabel(new Rect(rect.x+rect.width-(vr?50:35),rect.y+rect.height-(vr?40:29),vr?44:29,vr?36:25),"",vr?30:20,true);
   count.alignment=TextAlignmentOptions.BottomRight;
   if(!touchMode){
    var badge=UIPanel(new Rect(rect.x+4,rect.y+4,26,26),uiMint);
@@ -178,12 +176,13 @@ public sealed partial class SplashGame {
  }
  void ToggleSound(){muted=!muted;AudioListener.volume=muted?0:1;}
  void BuildHUD(){
+  if(!vr){
   hudStats=UILabel(new Rect(28,22,160,46),"",32,true);
   hudStats.alignment=TextAlignmentOptions.Center;hudStats.color=new Color(1f,.94f,.74f);
   var timerShadow=hudStats.gameObject.AddComponent<Shadow>();
   timerShadow.effectColor=new Color(.04f,.05f,.025f,.9f);timerShadow.effectDistance=new Vector2(2,-2);
   var settings=UIButton(new Rect(uw-80,22,60,60),"",Pause);
-  settings.gameObject.name="Settings";
+  settings.gameObject.name="Settings";settings.gameObject.SetActive(!vr);
   var icon=new GameObject("Settings gear",typeof(RectTransform),typeof(RawImage));
   Position(icon,new Rect(8,8,44,44),settings.transform);
   var graphic=icon.GetComponent<RawImage>();
@@ -191,15 +190,34 @@ public sealed partial class SplashGame {
   graphic.raycastTarget=false;
   coinLabel=UILabel(new Rect(uw-355,25,220,40),"",23,true);
   shopControl=UIButton(new Rect(uw-210,87,190,48),"SHOP",()=>OpenShop()).gameObject;shopControl.SetActive(NearShop);
-  var cross=UILabel(new Rect(uw/2-12,uh/2-20,24,40),"+",24);cross.alignment=TextAlignmentOptions.Center;
-  noticePanel=UIPanel(new Rect(uw/2-335,145,670,58),new Color(.16f,.15f,.085f,.93f));
-  noticeLabel=UILabel(new Rect(uw/2-315,151,630,46),"",18);noticeLabel.alignment=TextAlignmentOptions.Center;
+  if(!vr){var cross=UILabel(new Rect(uw/2-12,uh/2-20,24,40),"+",24);cross.alignment=TextAlignmentOptions.Center;}
+  }
+  noticePanel=UIPanel(new Rect(uw/2-335,vr?510:145,670,58),new Color(.16f,.15f,.085f,.93f));
+  noticeLabel=UILabel(new Rect(uw/2-315,vr?516:151,630,46),"",18);noticeLabel.alignment=TextAlignmentOptions.Center;
   dangerPanel=UIPanel(new Rect(uw/2-260,uh*.34f,520,60),new Color(.62f,.09f,.04f,.9f));
   var warning=UILabel(new Rect(uw/2-245,uh*.34f+5,490,50),"SPLASH! JUMP BACK TO SAFETY",23,true);warning.transform.SetParent(dangerPanel.transform,true);
   var progress=UIPanel(new Rect(uw/2-100,uh/2+40,200,14),uiInk);
   var fill=new GameObject("Valve progress",typeof(RectTransform),typeof(Image));Position(fill,new Rect(2,2,0,10),progress.transform);holdFill=fill.GetComponent<Image>();holdFill.color=uiMint;holdFill.raycastTarget=false;
-  BuildInventory();
+  if(vr)BuildVRInventory();else BuildInventory();
   if(touchMode)BuildTouchControls();
+ }
+ void BuildVRInventory(){
+  var root=uiRoot;
+  var go=new GameObject("Left wrist inventory",typeof(RectTransform));
+  vrWrist=Position(go,new Rect(0,0,340,220));vrWrist.pivot=new Vector2(.5f,.5f);
+  vrWristFade=go.AddComponent<CanvasGroup>();vrWristFade.alpha=0;vrWristFade.interactable=false;vrWristFade.blocksRaycasts=false;
+  vrWristOpen=false;vrWristAmount=vrWristGestureTime=0;
+  var canvas=go.AddComponent<Canvas>();canvas.overrideSorting=true;canvas.sortingOrder=uiCanvas.sortingOrder+1;
+  uiRoot=vrWrist;
+  UIPanel(new Rect(0,0,340,220),new Color(.075f,.10f,.10f,1));
+  hudStats=UILabel(new Rect(12,10,150,42),"",32,true);hudStats.alignment=TextAlignmentOptions.Center;
+  coinLabel=UILabel(new Rect(174,13,154,36),"",22,true);coinLabel.alignment=TextAlignmentOptions.Center;
+  BuildItemSlot(new Rect(32,66,120,120),"Pebbles","RT",out pebbleCount);
+  flareIcon=BuildItemSlot(new Rect(188,66,120,120),"Flare","LT",out flareCount);
+  UILabel(new Rect(32,190,120,24),"THROW",17).alignment=TextAlignmentOptions.Center;
+  UILabel(new Rect(188,190,120,24),"FLARE",17).alignment=TextAlignmentOptions.Center;
+  uiRoot=root;
+  go.SetActive(false);
  }
 }
 }
