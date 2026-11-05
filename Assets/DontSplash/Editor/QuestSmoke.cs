@@ -30,13 +30,13 @@ public static class QuestSmoke {
   SessionState.SetBool("QuestSmoke",false);
   // Opening the simulator can take focus while synthetic events are queued.
   // Isolate test focus handling without changing the project's input settings.
-  var originalInput=InputSystem.settings;var testInput=UnityEngine.Object.Instantiate(originalInput);
-  testInput.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
-  testInput.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
-  InputSystem.settings=testInput;
-  try{Test(game);File.WriteAllText("Logs/QuestSmoke.txt","PASS: controller bindings, animated Meta hands, palm-up inventory gesture, animated close and complete hiding, hand lowering and tracking loss, menu clearance and ray clicks, locomotion, snap turn, visible menu ray/cursor pixels, held items, motion-based release/drop, tracking/pause cancellation, bottle shattering, dry-surface silence and water attraction, monster face/strike targeting at three player heights with HMD movement, death camera stability.\nThis is a simulated test, not a headset performance test.");}
+  var originalInput=InputSystem.settings;
+  var background=originalInput.backgroundBehavior;var editorBehavior=originalInput.editorInputBehaviorInPlayMode;
+  originalInput.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+  originalInput.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+  try{Test(game);File.WriteAllText("Logs/QuestSmoke.txt","PASS: system focus/pause/tracking suspension during catch, overlapping pause sources, hidden hands/rays/HUD, live HMD tracking under system overlay, input neutral rearm and click cancellation, manifest permission removal rules, controller bindings, animated Meta hands, palm-up inventory gesture, animated close and complete hiding, hand lowering and tracking loss, menu clearance and ray clicks, locomotion, snap turn, visible menu ray/cursor pixels, held items, motion-based release/drop, tracking/pause cancellation, bottle shattering, dry-surface silence and water attraction, monster face/strike targeting at three player heights with HMD movement, death camera stability.\nThis is a simulated test, not a headset performance test.");}
   catch(Exception e){File.WriteAllText("Logs/QuestSmoke.txt","FAIL\n"+e);Debug.LogException(e);}
-  finally{var controls=Resources.Load<InputActionAsset>("QuestControls");if(controls)controls.devices=null;foreach(var device in simulated)if(device.added)InputSystem.RemoveDevice(device);simulated.Clear();InputSystem.RemoveLayout("QuestSmokeTouch");InputSystem.settings=originalInput;UnityEngine.Object.DestroyImmediate(testInput);EditorApplication.ExitPlaymode();}
+  finally{try{var controls=Resources.Load<InputActionAsset>("QuestControls");if(controls)controls.devices=null;foreach(var device in simulated)if(device.added)InputSystem.RemoveDevice(device);simulated.Clear();InputSystem.RemoveLayout("QuestSmokeTouch");originalInput.backgroundBehavior=background;originalInput.editorInputBehaviorInPlayMode=editorBehavior;}finally{EditorApplication.ExitPlaymode();}}
  }
  static void Push<T>(InputControl<T> control,T value) where T:struct {using(UnityEngine.InputSystem.LowLevel.StateEvent.From(control.device,out var state)){control.WriteValueIntoEvent(value,state);InputSystem.QueueEvent(state);InputSystem.Update();}}
  static void Test(SplashGame game){
@@ -49,6 +49,8 @@ public static class QuestSmoke {
   simulated.Add(left);simulated.Add(right);
   InputSystem.SetDeviceUsage(left,UnityEngine.InputSystem.CommonUsages.LeftHand);InputSystem.SetDeviceUsage(right,UnityEngine.InputSystem.CommonUsages.RightHand);
   Call(game,"TryInitializeVR",true);
+  Call(game,"OnApplicationPause",false);Call(game,"OnApplicationFocus",true);Call(game,"SetXRInputFocus",true);
+  Set(game,"vrTrackingAvailable",true);Call(game,"RefreshSystemPause");
   var actions=Field<InputActionAsset>(game,"vrActions");
   actions.devices=new UnityEngine.InputSystem.InputDevice[]{head,left,right};
   foreach(var action in actions)Check(action.controls.Count>0,"Unbound action: "+action.name);
@@ -61,6 +63,7 @@ public static class QuestSmoke {
   Push(right.pointerRotation,Quaternion.identity);
   Push(left.devicePosition,new Vector3(-.25f,1.3f,.4f));Push(left.deviceRotation,Quaternion.identity);
   Push(right.devicePosition,new Vector3(.25f,1.3f,.4f));Push(right.deviceRotation,Quaternion.identity);
+  Call(game,"UpdateVRInputGate");
   Call(game,"UpdateVRPose");Call(game,"SyncUI");Call(game,"LateVR");
   var eye=Field<Camera>(game,"eye");var canvas=Field<Canvas>(game,"uiCanvas");
   Check(canvas.renderMode==RenderMode.WorldSpace,"UI is not world-space");
@@ -160,6 +163,7 @@ public static class QuestSmoke {
   var modeField=typeof(SplashGame).GetField("mode",Flags);modeField.SetValue(game,Enum.Parse(modeField.FieldType,"Dead"));
   Call(game,"SyncUI");Call(game,"LateVR");Click(game,right,"RETRY");
   Check(Field<object>(game,"mode").ToString()=="Play","Retry ray click failed");
+  CheckSystemPause(game,head,left,right);
   foreach(float height in new[]{1.05f,1.65f,2.05f}){
    Push(head.centerEyePosition,new Vector3(.25f,height,.15f));Push(head.centerEyeRotation,Quaternion.Euler(0,40,0));Call(game,"UpdateVRPose");
    var pos=eye.transform.position;var rot=eye.transform.rotation;
@@ -183,6 +187,51 @@ public static class QuestSmoke {
   }
  }
  static void Set(SplashGame game,string name,object value)=>typeof(SplashGame).GetField(name,Flags).SetValue(game,value);
+ static void CheckSystemPause(SplashGame game,XRHMD head,OculusTouchControllerProfile.OculusTouchController left,OculusTouchControllerProfile.OculusTouchController right){
+  Push(left.thumbstick,Vector2.zero);Push(right.thumbstick,Vector2.zero);
+  Push(right.triggerPressed,0f);Push(left.triggerPressed,0f);Set(game,"cooldown",0f);
+  Call(game,"TickVRThrows",20f);Push(right.triggerPressed,1f);Call(game,"TickVRThrows",20.02f);
+  Check(Field<object>(game,"vrHeldItem")!=null,"Focus test did not hold item");int stock=Field<int>(game,"stones");
+  Call(game,"SetXRInputFocus",false);
+  Check(Field<object>(game,"mode").ToString()=="Pause"&&AudioListener.pause,"XR focus loss did not pause play/audio");
+  Check(Field<object>(game,"vrHeldItem")==null&&Field<int>(game,"stones")==stock,"Focus loss spent held item");
+  Call(game,"UpdateVRPose");Call(game,"LateVR");Call(game,"TickVRPointer",true);Call(game,"TickVRWrist",1f);
+  foreach(string name in new[]{"vrLeft","vrRight","vrLeftGrip","vrRightGrip","vrCursor","vrWrist"})Check(!Field<Transform>(game,name).gameObject.activeSelf,"System overlay left visible: "+name);
+  Check(!Field<LineRenderer>(game,"vrRay").enabled,"System overlay left ray visible");
+  var eye=Field<Camera>(game,"eye");Push(head.centerEyePosition,new Vector3(.1f,1.7f,.1f));Call(game,"UpdateVRPose");
+  Check(eye.enabled&&Vector3.Distance(eye.transform.localPosition,head.centerEyePosition.ReadValue())<.001f,"System overlay stopped head rendering/tracking");
+  Call(game,"Resume");Check(Field<object>(game,"mode").ToString()=="Pause","Resume bypassed system pause");
+  Call(game,"OnApplicationPause",true);Call(game,"SetXRInputFocus",true);
+  Check(Field<bool>(game,"systemSuspended"),"XR focus return bypassed OS pause");
+  Call(game,"OnApplicationPause",false);Call(game,"UpdateVRInputGate");
+  Check(!Field<bool>(game,"vrInputReady")&&AudioListener.pause,"Held trigger rearmed input or resumed pause audio");
+  Call(game,"Resume");Call(game,"ReadVRInput");Call(game,"TickVRThrows",21f);
+  Check(Field<object>(game,"vrHeldItem")==null,"Held trigger spawned item after focus return");
+  Push(right.triggerPressed,0f);Push(left.thumbstick,Vector2.up);Call(game,"UpdateVRInputGate");Call(game,"ReadVRInput");
+  Check(!Field<bool>(game,"vrInputReady")&&Field<Vector2>(game,"move")==Vector2.zero,"Held stick bypassed input gate");
+  Push(left.thumbstick,Vector2.zero);Call(game,"UpdateVRInputGate");Call(game,"UpdateVRPose");
+  Check(Field<bool>(game,"vrInputReady"),"Neutral controls did not rearm input");
+  Call(game,"Pause");Call(game,"SyncUI");Call(game,"LateVR");Aim(game,right,"RESUME");
+  Push(right.triggerPressed,1f);Call(game,"TickVRPointer",true);Check(Field<Button>(game,"vrPressed"),"Focus test did not press RESUME");
+  Call(game,"OnApplicationFocus",false);Push(right.triggerPressed,0f);Call(game,"TickVRPointer",true);
+  Check(!Field<Button>(game,"vrPressed")&&Field<object>(game,"mode").ToString()=="Pause","Lost-focus release clicked RESUME");
+  Call(game,"OnApplicationFocus",true);Call(game,"UpdateVRInputGate");Call(game,"UpdateVRPose");Call(game,"LateVR");
+  Click(game,right,"RESUME");Check(Field<object>(game,"mode").ToString()=="Play","Fresh click failed after focus return");
+  Call(game,"BeginCatch");Call(game,"StepCatch",.5f);
+  float clock=Field<float>(game,"catchClock");int deaths=Field<int>(game,"deaths");var monster=Field<Transform>(game,"monster");var position=monster.position;
+  Call(game,"OnApplicationPause",true);Call(game,"OnApplicationFocus",false);Call(game,"SetXRInputFocus",false);
+  Call(game,"StepCatch",10f);Call(game,"Update");
+  Check(Field<float>(game,"catchClock")==clock&&!Field<bool>(game,"catchHit")&&Field<int>(game,"deaths")==deaths&&monster.position==position,"Suspended catch advanced/struck/killed player");
+  Call(game,"OnApplicationPause",false);Call(game,"OnApplicationFocus",true);Call(game,"StepCatch",10f);
+  Check(Field<float>(game,"catchClock")==clock&&AudioListener.pause,"Catch resumed before XR focus returned");
+  Call(game,"SetXRInputFocus",true);Call(game,"StepCatch",.02f);
+  Check(Field<float>(game,"catchClock")>clock&&!AudioListener.pause,"Catch did not resume at saved point");
+  Push(head.isTracked,0f);Call(game,"TickVR");clock=Field<float>(game,"catchClock");Call(game,"StepCatch",10f);
+  Check(Field<bool>(game,"systemSuspended")&&Field<float>(game,"catchClock")==clock,"Lost HMD tracking did not freeze catch");
+  Push(head.isTracked,1f);Call(game,"TickVR");Call(game,"Resume");Call(game,"UpdateVRPose");
+  var manifest=new System.Xml.XmlDocument();manifest.Load("Assets/Plugins/Android/AndroidManifest.xml");
+  foreach(string permission in new[]{"RECORD_AUDIO","MODIFY_AUDIO_SETTINGS","BLUETOOTH"})Check(manifest.SelectNodes("/manifest/uses-permission").Cast<System.Xml.XmlElement>().Any(e=>e.GetAttribute("name","http://schemas.android.com/apk/res/android")=="android.permission."+permission&&e.GetAttribute("node","http://schemas.android.com/tools")=="remove"),"Missing manifest removal rule: "+permission);
+ }
  static T Item<T>(object item,string name)=>(T)item.GetType().GetField(name).GetValue(item);
  static void ItemSet(object item,string name,object value)=>item.GetType().GetField(name).SetValue(item,value);
  static void CheckPhysicalThrows(SplashGame game,OculusTouchControllerProfile.OculusTouchController left,OculusTouchControllerProfile.OculusTouchController right){

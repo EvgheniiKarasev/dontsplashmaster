@@ -32,12 +32,14 @@ public sealed partial class SplashGame {
  float vrFade, vrVignette,vrHandMotion;
  readonly List<XRInputSubsystem> vrSubsystems=new List<XRInputSubsystem>();
  InputAction VA(string name)=>vrActions.FindAction(name,true);
- bool VRPressed(string name)=>VA(name).WasPressedThisFrame();
+ bool VRPressed(string name)=>VRCanInteract&&VA(name).WasPressedThisFrame();
  bool VRHeld(string name)=>VA(name).IsPressed();
  Transform ThrowOrigin=>vr&&vrRight.gameObject.activeSelf?vrRight:eye.transform;
 
  void TryInitializeVR(bool preview=false){
+  if(preview)vrPreview=true;
   if(vr||(!preview&&!XRSettings.isDeviceActive))return;
+  Application.runInBackground=true;
   vr=true;touchMode=false;Application.targetFrameRate=72;
   vrActions=Resources.Load<InputActionAsset>("QuestControls");vrActions.Enable();
   vrOrigin=new GameObject("XR tracking space").transform;vrOrigin.SetParent(body.transform,false);
@@ -103,6 +105,7 @@ public sealed partial class SplashGame {
  }
  void UpdateVRPose(){
   if(!vr||!eye||vrActions==null)return;
+  PollXRInputFocus();
   if(!vrOriginReady){
    SubsystemManager.GetSubsystems(vrSubsystems);
    foreach(var subsystem in vrSubsystems)if(subsystem.running){
@@ -114,6 +117,7 @@ public sealed partial class SplashGame {
    eye.transform.localPosition=VA("HeadPosition").ReadValue<Vector3>();eye.transform.localRotation=VA("HeadRotation").ReadValue<Quaternion>();
    if(!vrHeadReady){vrHeadReady=true;ResetVRPosition();}
   }
+  if(SystemSuspended){HideVRInteraction();return;}
   UpdateVRHand(vrLeft,"Left");UpdateVRHand(vrRight,"Right");
   UpdateVRGrip(vrLeftGrip,vrLeftAnimator,"Left");UpdateVRGrip(vrRightGrip,vrRightAnimator,"Right");
  }
@@ -158,9 +162,11 @@ public sealed partial class SplashGame {
   TryInitializeVR();if(!vr)return;
   vrHandMotion=Mathf.MoveTowards(vrHandMotion,mode==Mode.Play?Mathf.Clamp01(move.magnitude):0,Time.unscaledDeltaTime*4);
   UpdateVRPose();
-  if(!VRHeld("HeadTracked")){if(mode==Mode.Play)Pause();return;}
+  vrTrackingAvailable=VRHeld("HeadTracked");
   var head=UnityEngine.XR.InputDevices.GetDeviceAtXRNode(XRNode.Head);
-  if(head.TryGetFeatureValue(UnityEngine.XR.CommonUsages.userPresence,out bool present)&&!present&&mode==Mode.Play)Pause();
+  if(!vrPreview&&head.TryGetFeatureValue(UnityEngine.XR.CommonUsages.userPresence,out bool present)&&!present)vrTrackingAvailable=false;
+  RefreshSystemPause();UpdateVRInputGate();
+  if(!VRCanInteract)return;
   if(VRPressed("Pause")||VRPressed("Menu")){
    if(mode==Mode.Play)Pause();else if(mode==Mode.Shop)CloseShop();else if(mode==Mode.Pause&&!codeOpen)Resume();
   }
@@ -175,6 +181,7 @@ public sealed partial class SplashGame {
   }
  }
  void ReadVRInput(){
+  if(!VRCanInteract){ClearGameplayInput();return;}
   move=VA("Move").ReadValue<Vector2>();if(move.magnitude<.18f)move=Vector2.zero;
   move=Vector2.ClampMagnitude(move,1);look=Vector2.zero;
   jump|=VRPressed("Jump");use=VRHeld("Use");
@@ -192,6 +199,7 @@ public sealed partial class SplashGame {
  }
  void LateVR(){
   if(!vr)return;
+  if(SystemSuspended){HideVRInteraction();return;}
   if(mode!=Mode.Play)CancelVRThrows();else UpdateVRHeldItems();
   bool menu=mode!=Mode.Play&&mode!=Mode.Caught;
   // Menus must remain readable through scenery/the frozen death animation.
@@ -232,7 +240,7 @@ public sealed partial class SplashGame {
  void UpdateVRWrist()=>TickVRWrist(Time.unscaledDeltaTime);
  void TickVRWrist(float dt){
   if(!vrWrist)return;
-  if(mode!=Mode.Play||!VRHeld("HeadTracked")||!vrLeftGrip.gameObject.activeSelf||!vrPalm){
+  if(!VRCanInteract||mode!=Mode.Play||!VRHeld("HeadTracked")||!vrLeftGrip.gameObject.activeSelf||!vrPalm){
    vrWristOpen=false;vrWristAmount=vrWristGestureTime=0;vrWristFade.alpha=0;vrWrist.gameObject.SetActive(false);return;
   }
   Vector3 palm=vrPalm.position,fromHead=palm-eye.transform.position;
@@ -256,7 +264,7 @@ public sealed partial class SplashGame {
   vrRay.sortingLayerID=uiCanvas.sortingLayerID;vrRay.sortingOrder=uiCanvas.sortingOrder+3;
   var cursorRenderer=vrCursor.GetComponent<Renderer>();
   cursorRenderer.sortingLayerID=uiCanvas.sortingLayerID;cursorRenderer.sortingOrder=uiCanvas.sortingOrder+4;
-  vrRay.enabled=menu&&vrRight.gameObject.activeSelf;
+  vrRay.enabled=menu&&VRCanInteract&&vrRight.gameObject.activeSelf;
   vrCursor.gameObject.SetActive(false);
   if(!vrRay.enabled||vrButtons==null){CancelVRPointer();return;}
   var ray=new Ray(vrRight.position,vrRight.forward);var plane=new Plane(uiCanvas.transform.forward,uiCanvas.transform.position);

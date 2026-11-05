@@ -37,7 +37,7 @@ public sealed partial class SplashGame {
   vrThrowReady=vrFlareReady=false;vrRightMotion.Clear();vrLeftMotion.Clear();
  }
  void TickVRThrows(float time){
-  if(mode!=Mode.Play||!VRHeld("HeadTracked")){CancelVRThrows();return;}
+  if(!VRCanInteract||mode!=Mode.Play||!VRHeld("HeadTracked")){CancelVRThrows();return;}
   bool right=VRHeld("RightTracked"),left=VRHeld("LeftTracked");
   if(right)vrRightMotion.Sample(VA("RightGripPosition").ReadValue<Vector3>(),VA("RightGripRotation").ReadValue<Quaternion>(),time);
   else{if(vrHeldItem!=null){vrHeldItem.held=vrHeldItem.active=false;vrHeldItem.t.gameObject.SetActive(false);vrHeldItem=null;}vrRightMotion.Clear();vrThrowReady=false;}

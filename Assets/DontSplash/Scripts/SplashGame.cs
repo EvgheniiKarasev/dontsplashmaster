@@ -123,7 +123,7 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
   BuildRoom();mode=Mode.Play;CursorState(true);if(!muted)ambience.Play();
  }
  void Pause(){if(mode!=Mode.Play)return;mode=Mode.Pause;CancelVRThrows();CursorState(false);AudioListener.pause=true;moveFinger=lookFinger=useFinger=-1;move=look=Vector2.zero;throwInput=flareInput=jump=false;use=false;}
- void ContinueGame(System.Action next){AudioListener.pause=false;next();}
+ void ContinueGame(System.Action next){if(SystemSuspended)return;AudioListener.pause=false;next();}
  void Resume(){ContinueGame(()=>{mode=Mode.Play;CursorState(true);});}
  void Die(){if(mode==Mode.Play)BeginCatch();}
  void Save(){PlayerPrefs.SetInt("Chamber",stage);PlayerPrefs.SetInt("Leg",leg);PlayerPrefs.SetFloat("Time",elapsed);PlayerPrefs.SetInt("HasSave",1);PlayerPrefs.Save();}
@@ -136,6 +136,7 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
  }
  void Update(){
   TickVR();
+  if(SystemSuspended)return;
   if(!vr&&Touchscreen.current!=null&&Touchscreen.current.primaryTouch.press.isPressed)touchMode=true;
   var k=Keyboard.current;
   if(k!=null&&k.escapeKey.wasPressedThisFrame){if(mode==Mode.Play)Pause();else if(mode==Mode.Pause){
@@ -245,8 +246,6 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
  Rect ThrowRect=>new Rect(uw/2-94,uh-108,86,86);
  Rect FlareRect=>new Rect(uw/2+8,uh-108,86,86);
  Rect UseRect=>new Rect(uw-245,uh-220,76,76);
- void OnApplicationFocus(bool focus){if(!focus)Pause();}
- void OnApplicationPause(bool pause){if(pause)Pause();}
  void OnDestroy(){DisposeVR();AudioListener.pause=false;Cursor.lockState=CursorLockMode.None;}
  string TimeText(){int t=(int)elapsed;return (t/60).ToString("00")+":"+(t%60).ToString("00");}
 }

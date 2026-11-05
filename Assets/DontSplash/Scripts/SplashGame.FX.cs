@@ -38,7 +38,7 @@ public sealed partial class SplashGame {
  void TickFX(){
   foreach(var b in bursts){
    if(b.remaining<=0)continue;
-   if(mode!=Mode.Play){foreach(var ps in b.systems)if(ps.isPlaying)ps.Pause(false);continue;}
+   if(SystemSuspended||mode!=Mode.Play){foreach(var ps in b.systems)if(ps.isPlaying)ps.Pause(false);continue;}
    foreach(var ps in b.systems)if(ps.isPaused)ps.Play(false);
    b.remaining-=Time.deltaTime;if(b.remaining<=0)b.go.SetActive(false);
   }

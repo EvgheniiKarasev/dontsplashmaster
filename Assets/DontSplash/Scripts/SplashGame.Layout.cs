@@ -211,6 +211,7 @@ public sealed partial class SplashGame {
  }
  void TickCatch()=>StepCatch(Time.deltaTime);
  void StepCatch(float dt){
+  if(SystemSuspended)return;
   catchClock+=dt;
   float inspectDuration=deaths==0?2f:1.3f;
   if(!catchStrikeStarted&&catchClock>=inspectDuration){catchStrikeStarted=true;creature.BeginAttack();}

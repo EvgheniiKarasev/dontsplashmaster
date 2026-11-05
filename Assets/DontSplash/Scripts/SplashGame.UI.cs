@@ -60,7 +60,7 @@ public sealed partial class SplashGame {
   var colors=button.colors;colors.normalColor=Color.white;colors.highlightedColor=new Color(1.08f,1.08f,1.08f);
   colors.pressedColor=new Color(.78f,.78f,.78f);colors.disabledColor=new Color(.5f,.5f,.5f);colors.fadeDuration=.1f;button.colors=colors;
   button.enabled=action!=null;
-  if(action!=null)button.onClick.AddListener(()=>{Sfx(clickClip);action();});
+  if(action!=null)button.onClick.AddListener(()=>{if(SystemSuspended)return;Sfx(clickClip);action();});
   caption=UILabel(new Rect(r.x+12,r.y+4,r.width-24,r.height-8),text,21);caption.alignment=TextAlignmentOptions.Center;caption.color=uiInk;
   caption.transform.SetParent(go.transform,true);
   caption.textWrappingMode=TextWrappingModes.NoWrap;caption.overflowMode=TextOverflowModes.Ellipsis;
