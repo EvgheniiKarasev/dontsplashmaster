@@ -1,0 +1,52 @@
+DONT SPLASH - PLAYGAMA
+
+Build: Dont Splash > Build Playgama release
+Output: Build/Playgama (index.html at the archive root).
+Unity: 6000.3.24f1. Playgama Bridge Unity: 2.4.0, vendored in Packages.
+
+Integration
+- The local Bridge script initializes before Unity or game assets load.
+- Versioned progress uses Bridge Storage, including currency, upgrades, rewards,
+  current chamber, elapsed time, tutorial progress and mute preference.
+- Read errors never replace an existing save. Writes are batched and serialized;
+  failed writes retry without losing changes made during an earlier write.
+- CONTINUE restores the saved chamber. NEW RUN restarts chambers while retaining
+  permanent upgrades, as in the original game economy.
+- GameReady is sent once after the first interactive frame.
+- Interstitials are requested on completed-level and game-over screens. Bridge
+  controls frequency. The player's next click resumes with pointer-lock access.
+- Host pause, focus loss, advertisements and platform/user mute are combined.
+- P or the settings gear pauses. Escape is reserved for the browser.
+- English is the sole declared localization and fallback for other Bridge languages.
+- Recorded imported audio replaces runtime-generated audio.
+- Brotli compression, decompression fallback enabled, browser data caching disabled.
+- No external links, third-party analytics, purchases or rewarded ad offers.
+- The original standalone portal SDK, editor tools, demos and JavaScript plugin
+  have been removed. Bridge itself is a cross-platform SDK maintained by Playgama.
+
+Validation
+- 34 dependency-isolated WebGL portal/save regression checks passed.
+- 2 native fallback persistence checks passed.
+- Unity 6000.3.24f1 release build succeeded; 8 files, 19,476,105 bytes unpacked.
+- Final Edge/WebGL check passed: initial save read once, GameReady, play/pause,
+  mute, Bridge save roundtrip, reload and CONTINUE. No JavaScript errors.
+- Touch movement, landscape/portrait rotation placeholder, and square layout
+  checked in Chromium mobile emulation. No page scrolling.
+- Playgama automatic archive check: PASSED; Bridge 2.4.0 (unity) FOUND.
+  Server measured startup: 3,395 ms; decompression fallback detected.
+- Published page loaded the game menu successfully with no page errors.
+- Full campaign completion and the full browser/physical-device matrix remain
+  unverified. See Publishing/Playgama/VALIDATION.txt for the requirement audit.
+
+Playgama application: cmw467piu0ggvha0hoq8qzzqq
+Archive: cmw47ahjg0fkugo0hfxq92e8q
+Version: dont-splash-playgama-1.0.0-20261106
+Zip: Build/DontSplash-Playgama-2026-11-06-v1.zip (19,096,094 bytes)
+SHA256: 4DD71958DE0C228D7F4428DA494B8E6871A40A83EF33BDEA8508595DEE9B2E9C
+QA: https://developer.playgama.com/qa-tool/cmw47ahjg0fkugo0hfxq92e8q
+Published: https://playgama.ai/play/titi3ujklln6vj
+Publication: PUBLISHED; live revision cmw47cqd40flogo0hl0prfne0 uses this archive.
+Catalog moderation is NOT submitted: Playgama returns MODERATION_UNAVAILABLE
+and catalogAvailable=false. The game must first reach the sandbox audience
+targets shown in the developer console before catalog submission opens.
+No traffic campaign, paid promotion or social posting was started.

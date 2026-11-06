@@ -29,15 +29,15 @@ public sealed partial class SplashGame : MonoBehaviour {
  class Step {public Transform t;public Vector3 home;public int kind;public float phase,sink;public Vector3 size;}
  class Valve {public Transform t;public bool done; public float charge;}
  float uiScale,uw,uh; string code=""; bool codeOpen;
- bool gameReady, accountChanged;
+ bool gameReady;
  float startupTime;
  System.Collections.IEnumerator Start(){
   startupTime=Time.realtimeSinceStartup;
   Application.targetFrameRate=60;QualitySettings.vSyncCount=0;
   portal=gameObject.AddComponent<PortalService>();portal.Initialize();
   while(!portal.InitializationComplete)yield return null;
-  GameSave.Initialize();
-  portal.AccountChanged+=()=>accountChanged=true;
+  portal.PauseRequested+=Pause;
+  muted=GameSave.GetInt("DS.Muted")==1;assist=GameSave.GetInt("DS.Assist")==1;portal.SetMuted(muted);
   tile=tileMaterial?new Material(tileMaterial):Mat(new Color(.64f,.71f,.62f));dark=Mat(new Color(.055f,.12f,.13f));water=waterMaterial?new Material(waterMaterial):Mat(new Color(.025f,.24f,.26f));glow=Mat(new Color(.37f,1,.76f),true);danger=Mat(new Color(.9f,.35f,.14f));brass=Mat(new Color(.75f,.64f,.32f));
   grid=new Texture2D(64,64,TextureFormat.RGB24,false);var pixels=new Color[4096];
   for(int y=0;y<64;y++)for(int x=0;x<64;x++)pixels[y*64+x]=(x<2||y<2)?new Color(.46f,.5f,.46f):new Color(.9f,.93f,.87f);
@@ -48,14 +48,14 @@ public sealed partial class SplashGame : MonoBehaviour {
   eye=new GameObject("Camera").AddComponent<Camera>();eye.transform.SetParent(player.transform);eye.transform.localPosition=Vector3.up*1.6f;eye.nearClipPlane=.07f;eye.farClipPlane=115;eye.fieldOfView=76;eye.gameObject.AddComponent<AudioListener>();eye.backgroundColor=RenderSettings.fogColor;eye.clearFlags=CameraClearFlags.SolidColor;var cameraData=eye.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();cameraData.requiresDepthTexture=true;cameraData.requiresColorTexture=false;
   var lamp=eye.gameObject.AddComponent<Light>();lamp.type=LightType.Spot;lamp.range=24;lamp.spotAngle=75;lamp.intensity=2;lamp.color=new Color(1,.92f,.69f);lamp.shadows=LightShadows.None;
   audioSource=gameObject.AddComponent<AudioSource>();audioSource.volume=.4f;
-  splashClip=waterImpactSound?waterImpactSound:Tone("Splash",110,.6f,true);jumpClip=playerJumpSound?playerJumpSound:Tone("Jump",250,.12f,false);clickClip=Tone("Valve",620,.16f,false);alarmClip=Tone("Threat",65,.5f,false);
-  ambience=gameObject.AddComponent<AudioSource>();ambience.clip=roomAmbienceSound?roomAmbienceSound:Tone("Ventilation",52,3,true);ambience.loop=true;ambience.volume=.12f;
+  splashClip=waterImpactSound;jumpClip=playerJumpSound;clickClip=landingSound;alarmClip=waterStepSound;
+  ambience=gameObject.AddComponent<AudioSource>();ambience.clip=roomAmbienceSound;ambience.loop=true;ambience.volume=.12f;
   playerFeet=gameObject.AddComponent<AudioSource>();playerFeet.playOnAwake=false;playerFeet.volume=.45f;
   touchMode=Application.isMobilePlatform||portal.IsTouchDevice;
   LoadEconomy();InitializeFX();InitializeThrows();BuildRoom();InitializeUI();gameReady=true;
+  yield return null;portal.GameReady();
  }
  Material Mat(Color c,bool emission=false){var m=surfaceMaterial?new Material(surfaceMaterial):new Material(Shader.Find("Universal Render Pipeline/Lit"));m.color=c;if(emission){m.EnableKeyword("_EMISSION");m.SetColor("_EmissionColor",c*1.4f);}return m;}
- AudioClip Tone(string n,float f,float seconds,bool noise){int count=(int)(22050*seconds);float[] data=new float[count];uint state=17;for(int i=0;i<count;i++){state=state*1664525+1013904223;float random=(state>>8)/16777216f*2-1;float t=i/22050f;data[i]=(Mathf.Sin(t*f*6.28318f)*.3f+(noise?random*.2f:0))*Mathf.Sin(Mathf.PI*i/count);}var clip=AudioClip.Create(n,count,1,22050,false);clip.SetData(data,0);return clip;}
  void Sfx(AudioClip clip){if(clip&&!muted)audioSource.PlayOneShot(clip);}
  GameObject Shape(string n,Vector3 p,Vector3 size,Material m,bool solid=true,PrimitiveType shape=PrimitiveType.Cube){
   var g=GameObject.CreatePrimitive(shape);g.name=n;g.transform.SetParent(room);g.transform.position=p;g.transform.localScale=size;g.GetComponent<Renderer>().sharedMaterial=m;
@@ -93,7 +93,7 @@ public sealed partial class SplashGame : MonoBehaviour {
   var renderers=m.GetComponentsInChildren<Renderer>();Bounds b=new Bounds(monster.position,Vector3.zero);foreach(var r in renderers){b.Encapsulate(r.bounds);if(monsterMaterial)r.sharedMaterial=monsterMaterial;}
   if(b.size.y>.01f)m.transform.localScale*=3.4f/b.size.y;
   monster.position=new Vector3(7,-.5f,18);
-  creature=monster.gameObject.AddComponent<MonsterPerformance>();creature.Initialize(m.transform,monsterAttack,monsterIdle,monsterRun,waterStepSound,monsterWalk,monsterReveal);
+  creature=monster.gameObject.AddComponent<MonsterPerformance>();creature.Initialize(m.transform,monsterAttack,monsterIdle,monsterRun,waterStepSound,monsterWalk,monsterReveal,roomAmbienceSound,throwSound,waterImpactSound,landingSound);
   spawn=new Vector3(0,.65f,-18);Respawn();stones=5;flares=2;Notice(MovingIntroduction?"Blue platforms move. Ride them, then jump.":tips[stage],6);
   DressEntranceAndExit();
  }
@@ -125,7 +125,7 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
   shoreGuideReached=false;
   stage=saved?Mathf.Clamp(GameSave.GetInt("Chamber"),0,8):0;leg=saved?Mathf.Clamp(GameSave.GetInt("Leg"),0,2):0;
   elapsed=saved?GameSave.GetFloat("Time"):0;deaths=0;completed=stage*3+leg;
-  BuildRoom();AudioListener.pause=false;mode=Mode.Play;CursorState(true);portal.StartPlay();if(!muted)ambience.Play();
+  BuildRoom();AudioListener.pause=false;mode=Mode.Play;CursorState(true);portal.StartPlay();if(!muted)ambience.Play();Save();
  }
  void Pause(){if(mode!=Mode.Play)return;mode=Mode.Pause;portal.StopPlay();CursorState(false);AudioListener.pause=true;moveFinger=lookFinger=useFinger=-1;move=look=Vector2.zero;throwInput=flareInput=jump=false;use=false;}
  void Resume(){if(portal.Busy)return;portal.ContinueImmediately(()=>{mode=Mode.Play;CursorState(true);portal.StartPlay();});}
@@ -137,13 +137,13 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
   RewardRoom();portal.StopPlay();CursorState(false);completed++;Sfx(clickClip);
   if(stage==8&&leg==2){mode=Mode.Win;portal.Celebrate();GameSave.DeleteKey("HasSave");GameSave.Save();}
   else{mode=Mode.Between;leg++;if(leg>=LegCount){stage++;leg=0;}Save();}
+  portal.ShowBreakAd("level_completed");
  }
  void Update(){
   if(!gameReady||portal.Busy)return;
-  if(accountChanged){accountChanged=false;portal.StopPlay();CursorState(false);AudioListener.pause=false;ambience.Stop();mode=Mode.Menu;codeOpen=false;LoadEconomy();uiKey="";return;}
   if(Touchscreen.current!=null&&Touchscreen.current.primaryTouch.press.isPressed)touchMode=true;
   var k=Keyboard.current;
-  if(k!=null&&k.escapeKey.wasPressedThisFrame){if(mode==Mode.Play)Pause();else if(mode==Mode.Pause){
+  if(k!=null&&k.pKey.wasPressedThisFrame){if(mode==Mode.Play)Pause();else if(mode==Mode.Pause){
 #if !UNITY_WEBGL || UNITY_EDITOR
  Resume();
 #endif
@@ -253,18 +253,10 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
  void OnApplicationPause(bool pause){if(pause)Pause();}
  void OnGUI(){
   if(gameReady)return;
-  string status=Time.realtimeSinceStartup-startupTime<20?"Connecting to CrazyGames...":"Could not connect yet. Check your connection and reload the page.";
+  string status=GameSave.LoadFailed?"Could not load your progress. Please reload to try again.":Time.realtimeSinceStartup-startupTime<20?"Loading your progress...":"Could not connect yet. Check your connection and reload the page.";
   GUI.Box(new Rect(Screen.width/2-280,Screen.height/2-35,560,70),status);
  }
  void OnDestroy(){AudioListener.pause=false;Cursor.lockState=CursorLockMode.None;}
  string TimeText(){int t=(int)elapsed;return (t/60).ToString("00")+":"+(t%60).ToString("00");}
 }
 }
-
-
-
-
-
-
-
-

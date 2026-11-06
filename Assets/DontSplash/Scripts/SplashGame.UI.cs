@@ -122,7 +122,10 @@ public sealed partial class SplashGame {
   Heading(new Rect(x,y+8,580,85),mode==Mode.Menu?"DONT SPLASH":codeOpen?"EMERGENCY EXIT":mode==Mode.Win?"SURFACE REACHED":mode==Mode.Dead?"IT HEARD YOU":mode==Mode.Between&&FirstGiftPending?"FIRST CROSSING!":mode==Mode.Between?"SECTOR CLEAR":"PAUSED");
   if(mode==Mode.Menu){
    UILabel(new Rect(x+20,y+145,540,60),"Keep the water quiet.",26).alignment=TextAlignmentOptions.Center;
-   UIButton(new Rect(x+110,y+410,360,65),"PLAY",()=>StartRun(false));
+   if(GameSave.GetInt("HasSave")==1){
+    UIButton(new Rect(x+110,y+320,360,65),"CONTINUE",()=>StartRun(true));
+    UIButton(new Rect(x+110,y+410,360,65),"NEW RUN",()=>StartRun(false));
+   }else UIButton(new Rect(x+110,y+410,360,65),"PLAY",()=>StartRun(false));
   }else if(mode==Mode.Between&&FirstGiftPending){
    UILabel(new Rect(x+20,y+120,540,85),"Choose a free permanent upgrade.",25).alignment=TextAlignmentOptions.Center;
    UIButton(new Rect(x+20,y+245,260,75),jumpLevel<3?"HIGHER JUMP":"2 EXTRA FLARES",()=>ClaimFirstGift(true));
@@ -146,7 +149,7 @@ public sealed partial class SplashGame {
     var lobby=UIButton(new Rect(x+20,y+465,260,56),"LOBBY",VisitLobby);
     if(lobby.targetGraphic)lobby.targetGraphic.color=new Color(.56f,.55f,.39f);
    }else if(mode==Mode.Pause&&!codeOpen)UIButton(new Rect(x+130,y+490,320,56),"LOBBY",VisitLobby);
-   busyLabel=UILabel(new Rect(x+20,y+375,540,40),"Returning to the poolrooms...",18);
+   busyLabel=UILabel(new Rect(x+20,y+375,540,40),"Please wait...",18);
    busyLabel.alignment=TextAlignmentOptions.Center;
    if(mode!=Mode.Dead)UIButton(new Rect(x+20,y+420,260,60),"SOUND",ToggleSound,out soundLabel);
    var mainMenu=UIButton(new Rect(x+300,y+(mode==Mode.Dead?465:420),260,mode==Mode.Dead?56:60),"MAIN MENU",()=>{if(mode!=Mode.Win)Save();mode=Mode.Menu;AudioListener.pause=false;portal.StopPlay();ambience.Stop();});
@@ -176,7 +179,7 @@ public sealed partial class SplashGame {
   }
   return graphic;
  }
- void ToggleSound(){muted=!muted;portal.SetMuted(muted);}
+ void ToggleSound(){muted=!muted;portal.SetMuted(muted);GameSave.SetInt("DS.Muted",muted?1:0);GameSave.Save();}
  void BuildHUD(){
   hudStats=UILabel(new Rect(28,22,160,46),"",32,true);
   hudStats.alignment=TextAlignmentOptions.Center;hudStats.color=new Color(1f,.94f,.74f);
@@ -203,4 +206,3 @@ public sealed partial class SplashGame {
  }
 }
 }
-

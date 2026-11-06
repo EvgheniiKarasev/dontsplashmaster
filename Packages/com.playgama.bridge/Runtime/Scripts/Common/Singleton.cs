@@ -1,0 +1,61 @@
+﻿#if UNITY_WEBGL
+using UnityEngine;
+
+namespace Playgama.Common
+{
+    public class Singleton<T> : MonoBehaviour where T : Component
+    {
+        public static T instance
+        {
+            get
+            {
+                if (_isApplicationQuitting)
+                {
+                    return null;
+                }
+
+                if (_instance != null)
+                {
+                    return _instance;
+                }
+
+#if UNITY_2023_1_OR_NEWER
+                _instance = FindAnyObjectByType<T>();
+#else
+                _instance = FindObjectOfType<T>();
+#endif
+                if (_instance != null)
+                {
+                    return _instance;
+                }
+
+                var obj = new GameObject { name = $"{typeof(T).Name}" };
+                _instance = obj.AddComponent<T>();
+                return _instance;
+            }
+        }
+        
+        protected static T _instance;
+        protected static bool _isApplicationQuitting;
+
+        
+        protected virtual void Awake()
+        {
+            if (_instance == null)
+            {
+                _instance = this as T;
+                DontDestroyOnLoad(gameObject);
+            }
+            else
+            {
+                Destroy(gameObject);
+            }
+        }
+
+        protected virtual void OnApplicationQuit()
+        {
+            _isApplicationQuitting = true;
+        }
+    }
+}
+#endif

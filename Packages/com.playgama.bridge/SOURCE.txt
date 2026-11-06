@@ -1,0 +1,1 @@
+Playgama Bridge Unity 2.4.0. Official source: https://github.com/Playgama/bridge-unity . Vendored from commit 223318ac8d9d9991e938d65bc06228216cee56cc. MIT license included. Assets/WebGLTemplates/Bridge contains the game-specific template; do not overwrite it when updating the package.

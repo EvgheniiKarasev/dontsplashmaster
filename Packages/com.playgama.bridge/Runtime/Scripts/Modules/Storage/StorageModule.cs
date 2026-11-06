@@ -1,0 +1,352 @@
+#if UNITY_WEBGL
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+#if !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
+
+namespace Playgama.Modules.Storage
+{
+    public class StorageModule : MonoBehaviour
+    {
+#if !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void PlaygamaBridgeGetStorageData(string key);
+
+        [DllImport("__Internal")]
+        private static extern void PlaygamaBridgeSetStorageData(string key, string value);
+
+        [DllImport("__Internal")]
+        private static extern void PlaygamaBridgeDeleteStorageData(string key);
+#else
+        private const string _storageDataEditorPlayerPrefsPrefix = "bridge_storage_data";
+#endif
+        private const string _dataSeparator = "{bridge_data_separator}";
+        private const string _keysSeparator = "{bridge_keys_separator}";
+        private const string _valuesSeparator = "{bridge_values_separator}";
+
+        private readonly Dictionary<string, List<Action<bool, string>>> _getDataCallbacks = new();
+        private readonly Dictionary<string, List<Action<bool, List<string>>>> _getMultipleDataCallbacks = new();
+        private readonly Dictionary<string, List<Action<bool>>> _setDataCallbacks = new();
+        private readonly Dictionary<string, List<Action<bool>>> _deleteDataCallbacks = new();
+
+
+        public void Get(string key, Action<bool, string> onComplete)
+        {
+            if (_getDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                callbacks.Add(onComplete);
+                _getDataCallbacks[key] = callbacks;
+            }
+            else
+            {
+                _getDataCallbacks.Add(key, new List<Action<bool, string>> { onComplete });
+#if !UNITY_EDITOR
+                PlaygamaBridgeGetStorageData(key);
+#else
+                var data = PlayerPrefs.GetString($"{_storageDataEditorPlayerPrefsPrefix}_{key}", null);
+                OnGetStorageDataSuccess($"{key}{_dataSeparator}{data}");
+#endif
+            }
+        }
+
+        public void Get(List<string> keys, Action<bool, List<string>> onComplete)
+        {
+            var keysCount = keys.Count;
+            if (keysCount <= 0)
+            {
+                onComplete?.Invoke(false, null);
+                return;
+            }
+
+            if (keysCount == 1)
+            {
+                Get(keys[0], (success, data) => { onComplete?.Invoke(success, success ? new List<string> { data } : null); });
+                return;
+            }
+
+            var key = string.Join(_keysSeparator, keys);
+            if (_getMultipleDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                callbacks.Add(onComplete);
+                _getMultipleDataCallbacks[key] = callbacks;
+            }
+            else
+            {
+                _getMultipleDataCallbacks.Add(key, new List<Action<bool, List<string>>> { onComplete });
+#if !UNITY_EDITOR
+                PlaygamaBridgeGetStorageData(key);
+#else
+                var values = new List<string>();
+                foreach (var k in keys)
+                {
+                    var v = PlayerPrefs.GetString($"{_storageDataEditorPlayerPrefsPrefix}_{k}", null);
+                    if (string.IsNullOrEmpty(v))
+                    {
+                        v = null;
+                    }
+
+                    values.Add(v);
+                }
+
+                var value = string.Join(_valuesSeparator, values);
+                OnGetStorageDataSuccess($"{key}{_dataSeparator}{value}");
+#endif
+            }
+        }
+
+
+        public void Set(string key, string value, Action<bool> onComplete = null)
+        {
+            if (_setDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                callbacks.Add(onComplete);
+                _setDataCallbacks[key] = callbacks;
+            }
+            else
+            {
+                _setDataCallbacks.Add(key, new List<Action<bool>> { onComplete });
+#if !UNITY_EDITOR
+                PlaygamaBridgeSetStorageData(key, value);
+#else
+                PlayerPrefs.SetString($"{_storageDataEditorPlayerPrefsPrefix}_{key}", value);
+                OnSetStorageDataSuccess(key);
+#endif
+            }
+        }
+
+        public void Set(string key, int value, Action<bool> onComplete = null)
+        {
+            Set(key, value.ToString(), onComplete);
+        }
+
+        public void Set(string key, bool value, Action<bool> onComplete = null)
+        {
+            Set(key, value.ToString(), onComplete);
+        }
+
+        public void Set(List<string> keys, List<object> values, Action<bool> onComplete = null)
+        {
+            if (keys == null || values == null || keys.Count <= 0 || keys.Count != values.Count)
+            {
+                onComplete?.Invoke(false);
+                return;
+            }
+
+            var key = string.Join(_keysSeparator, keys);
+            if (_setDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                callbacks.Add(onComplete);
+                _setDataCallbacks[key] = callbacks;
+            }
+            else
+            {
+                _setDataCallbacks.Add(key, new List<Action<bool>> { onComplete });
+#if !UNITY_EDITOR
+                var value = string.Join(_valuesSeparator, values);
+                PlaygamaBridgeSetStorageData(key, value);
+#else
+                for (var i = 0; i < keys.Count; i++)
+                {
+                    PlayerPrefs.SetString($"{_storageDataEditorPlayerPrefsPrefix}_{keys[i]}", values[i].ToString());
+                }
+
+                OnSetStorageDataSuccess($"{key}");
+#endif
+            }
+        }
+
+        public void Set(Dictionary<string, object> data, Action<bool> onComplete = null)
+        {
+            if (data == null || data.Count <= 0)
+            {
+                onComplete?.Invoke(false);
+                return;
+            }
+
+            Set(data.Keys.ToList(), data.Values.ToList(), onComplete);
+        }
+
+
+        public void Delete(string key, Action<bool> onComplete = null)
+        {
+            if (_deleteDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                callbacks.Add(onComplete);
+                _deleteDataCallbacks[key] = callbacks;
+            }
+            else
+            {
+                _deleteDataCallbacks.Add(key, new List<Action<bool>> { onComplete });
+#if !UNITY_EDITOR
+                PlaygamaBridgeDeleteStorageData(key);
+#else
+                PlayerPrefs.DeleteKey($"{_storageDataEditorPlayerPrefsPrefix}_{key}");
+                OnDeleteStorageDataSuccess(key);
+#endif
+            }
+        }
+
+        public void Delete(List<string> keys, Action<bool> onComplete = null)
+        {
+            var key = string.Join(_keysSeparator, keys);
+            if (_deleteDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                callbacks.Add(onComplete);
+                _deleteDataCallbacks[key] = callbacks;
+            }
+            else
+            {
+                _deleteDataCallbacks.Add(key, new List<Action<bool>> { onComplete });
+#if !UNITY_EDITOR
+                PlaygamaBridgeDeleteStorageData(key);
+#else
+                foreach (var k in keys)
+                {
+                    PlayerPrefs.DeleteKey($"{_storageDataEditorPlayerPrefsPrefix}_{k}");
+                }
+
+                OnDeleteStorageDataSuccess($"{key}");
+#endif
+            }
+        }
+
+
+        // Called from JS
+        private void OnGetStorageDataSuccess(string result)
+        {
+            var keyEndIndex = result.IndexOf(_dataSeparator);
+            if (keyEndIndex <= 0)
+            {
+                return;
+            }
+
+            var keysString = result.Substring(0, keyEndIndex);
+            var valuesString = result.Substring(keyEndIndex + _dataSeparator.Length, result.Length - keyEndIndex - _dataSeparator.Length);
+            var keys = keysString.Split(_keysSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+            if (keys.Length > 1)
+            {
+                var values = valuesString.Split(_valuesSeparator).ToList();
+
+                for (var i = 0; i < values.Count; i++)
+                {
+                    var value = values[i];
+                    if (string.IsNullOrEmpty(value))
+                    {
+                        values[i] = null;
+                    }
+                }
+
+                if (_getMultipleDataCallbacks.TryGetValue(keysString, out var callbacks))
+                {
+                    _getMultipleDataCallbacks.Remove(keysString);
+
+                    foreach (var callback in callbacks)
+                    {
+                        callback?.Invoke(true, values);
+                    }
+                }
+            }
+            else
+            {
+                if (_getDataCallbacks.TryGetValue(keysString, out var callbacks))
+                {
+                    _getDataCallbacks.Remove(keysString);
+
+                    foreach (var callback in callbacks)
+                    {
+                        callback?.Invoke(true, string.IsNullOrEmpty(valuesString) ? null : valuesString);
+                    }
+                }
+            }
+        }
+
+        private void OnGetStorageDataFailed(string keysString)
+        {
+            var keys = keysString.Split(_keysSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+            if (keys.Length > 1)
+            {
+                if (_getMultipleDataCallbacks.TryGetValue(keysString, out var callbacks))
+                {
+                    _getMultipleDataCallbacks.Remove(keysString);
+
+                    foreach (var callback in callbacks)
+                    {
+                        callback?.Invoke(false, null);
+                    }
+                }
+            }
+            else
+            {
+                if (_getDataCallbacks.TryGetValue(keysString, out var callbacks))
+                {
+                    _getDataCallbacks.Remove(keysString);
+
+                    foreach (var callback in callbacks)
+                    {
+                        callback?.Invoke(false, null);
+                    }
+                }
+            }
+        }
+
+        private void OnSetStorageDataSuccess(string key)
+        {
+            if (_setDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                _setDataCallbacks.Remove(key);
+
+                foreach (var callback in callbacks)
+                {
+                    callback?.Invoke(true);
+                }
+            }
+        }
+
+        private void OnSetStorageDataFailed(string key)
+        {
+            if (_setDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                _setDataCallbacks.Remove(key);
+
+                foreach (var callback in callbacks)
+                {
+                    callback?.Invoke(false);
+                }
+            }
+        }
+
+        private void OnDeleteStorageDataSuccess(string key)
+        {
+            if (_deleteDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                _deleteDataCallbacks.Remove(key);
+
+                foreach (var callback in callbacks)
+                {
+                    callback?.Invoke(true);
+                }
+            }
+        }
+
+        private void OnDeleteStorageDataFailed(string key)
+        {
+            if (_deleteDataCallbacks.TryGetValue(key, out var callbacks))
+            {
+                _deleteDataCallbacks.Remove(key);
+
+                foreach (var callback in callbacks)
+                {
+                    callback?.Invoke(false);
+                }
+            }
+        }
+
+
+    }
+}
+#endif

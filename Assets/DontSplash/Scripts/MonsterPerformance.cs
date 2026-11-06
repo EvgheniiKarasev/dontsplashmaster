@@ -17,7 +17,7 @@ public sealed class MonsterPerformance : MonoBehaviour {
  float gaitClock;
  float clock,stepClock,alertCooldown,attackClock=-1,attackDuration=1,blend;
  bool impactSent,stunnedBefore; public bool Attacking=>attackClock>=0;
- public void Initialize(Transform model,AnimationClip attack,AnimationClip idle=null,AnimationClip run=null,AudioClip waterSteps=null,AnimationClip walk=null,AnimationClip reveal=null) {
+ public void Initialize(Transform model,AnimationClip attack,AnimationClip idle=null,AnimationClip run=null,AudioClip waterSteps=null,AnimationClip walk=null,AnimationClip reveal=null,AudioClip breath=null,AudioClip alert=null,AudioClip strike=null,AudioClip hit=null) {
   // Infer the imported rig's forward axis from the feet, rather than assuming FBX orientation.
   Transform leftFoot=null,leftToe=null,rightFoot=null,rightToe=null;
   foreach(var bone in model.GetComponentsInChildren<Transform>()){
@@ -51,23 +51,11 @@ public sealed class MonsterPerformance : MonoBehaviour {
    output.SetSourcePlayable(mixer);
    attackDuration=Mathf.Max(.65f,attack.length);graph.Play();
   }
-  if(!breathClip){breathClip=Sound("Creature breathing",3.2f,48,.55f);alertClip=Sound("Listening growl",.85f,72,.8f);strikeClip=Sound("Attack roar",.7f,115,1);hitClip=Sound("Impact",.28f,35,1);waterClip=Sound("Water step",.32f,90,.75f);}
-  if(waterSteps)waterClip=waterSteps;
+  breathClip=breath?breath:waterSteps;alertClip=alert?alert:waterSteps;strikeClip=strike?strike:waterSteps;hitClip=hit?hit:waterSteps;waterClip=waterSteps;
   breathing=Source(.55f);breathing.loop=true;breathing.clip=breathClip;
   voice=Source(.8f);footsteps=Source(.35f);
  }
  AudioSource Source(float volume){var s=gameObject.AddComponent<AudioSource>();s.playOnAwake=false;s.spatialBlend=1;s.rolloffMode=AudioRolloffMode.Linear;s.minDistance=2;s.maxDistance=25;s.dopplerLevel=0;s.volume=volume;return s;}
- static AudioClip Sound(string name,float length,float hz,float rough){
-  int count=(int)(22050*length);var data=new float[count];uint seed=12345;float filtered=0;
-  for(int i=0;i<count;i++){
-   seed=1664525*seed+1013904223;float noise=(seed>>8)/16777216f*2-1;filtered=Mathf.Lerp(filtered,noise,.09f);
-   float t=i/22050f,phase=t/length;
-   float envelope=Mathf.Pow(Mathf.Sin(Mathf.PI*phase),.7f);
-   float growl=Mathf.Sin(t*hz*6.283f+Mathf.Sin(t*19)*2)*.2f+Mathf.Sin(t*hz*3.12f)*.15f;
-   data[i]=Mathf.Clamp((growl+filtered*rough*1.6f)*envelope,-.7f,.7f);
-  }
-  var clip=AudioClip.Create(name,count,1,22050,false);clip.SetData(data,0);return clip;
- }
  public void Hear(){
   if(alertCooldown>0||Attacking)return;alertCooldown=2.8f;
   voice.pitch=.85f;voice.PlayOneShot(alertClip,.7f);blend=1;
@@ -140,5 +128,3 @@ public sealed class MonsterPerformance : MonoBehaviour {
  void OnDestroy(){if(graph.IsValid())graph.Destroy();}
 }
 }
-
-

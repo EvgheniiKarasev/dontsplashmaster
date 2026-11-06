@@ -1,8 +1,6 @@
 <linker>
-  <!-- SDK callbacks are invoked by name from the CrazyGames JavaScript bridge. -->
-  <assembly fullname="Assembly-CSharp">
-    <type fullname="CrazyGames.*" preserve="all"/>
-  </assembly>
+  <!-- Bridge callbacks arrive by name from the browser. -->
+  <assembly fullname="Playgama.Bridge" preserve="all"/>
   <!-- CreatePrimitive chooses these native components at runtime; scene dependency
        scanning does not see the sphere/capsule colliders used by procedural objects. -->
   <assembly fullname="UnityEngine.PhysicsModule">

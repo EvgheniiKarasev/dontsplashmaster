@@ -126,7 +126,7 @@ public static class DemoSetup {
    importer.maxTextureSize=1024;importer.textureCompression=TextureImporterCompression.Compressed;
    importer.crunchedCompression=importer.textureType!=TextureImporterType.Lightmap;importer.compressionQuality=65;importer.SaveAndReimport();
   }
-  CrazyGamesReleaseSettings.Apply();
+  PlaygamaReleaseSettings.Apply();
   var report=BuildPipeline.BuildPlayer(EditorBuildSettings.scenes,"Build/Web",BuildTarget.WebGL,BuildOptions.None);
   Debug.Log("WEB_RESULT: "+report.summary.result+"; bytes: "+report.summary.totalSize);
   if(report.summary.result!=BuildResult.Succeeded)throw new System.Exception("Web build failed");

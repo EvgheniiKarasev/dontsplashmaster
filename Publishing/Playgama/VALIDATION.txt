@@ -1,0 +1,83 @@
+DONT SPLASH / Playgama 1.0.0 / 2026-11-06
+
+Requirements fetched live through Playgama MCP before implementation and again
+before archive upload. No requirement pages were unavailable. Partner-specific
+distribution is disabled; this release targets the Playgama sandbox only.
+Source: https://wiki.playgama.com/playgama/game-requirements
+
+1.1.1-1.1.2: Official Bridge Unity 2.4.0; local synchronous SDK script precedes
+engine loading, English fallback, storage, ready and platform events integrated.
+Unit regression checks passed. Server detected Bridge and accepted the archive.
+1.2.1-1.2.3: No player sign-in feature or external account requirement.
+1.2.4-1.2.5: No third-party game analytics or game-asset downloads. Game files
+and SDK ship in the archive; platform services use the official Bridge.
+1.2.6-1.2.7: No external links in game and no URL-based game restriction.
+1.3.1-1.3.2: 19,096,094-byte zip, root index.html, Latin names, 8 game files.
+1.3.3: Playgama automatic startup check PASSED; no startup-memory refusal.
+1.4.1,1.4.3: Full available canvas, landscape declared, built-in rotate popup.
+1.4.2: No free-text entry; final emergency code uses game keypad buttons.
+1.4.4: Touch movement observed in Android emulation. Physical multi-touch and
+full campaign play on Android/iOS remain unverified.
+1.4.5-1.4.6: Touch selection/context menu disabled; no mobile warning screen.
+1.5.1-1.5.3: Keyboard/mouse and touch startup/movement checked. P/gear pauses;
+the game has no Escape binding.
+1.6.1-1.6.5,1.6.7-1.6.8: Main menu, play and pause checked at desktop 1280x720,
+Android-emulated 844x390 and square 800x800; portrait rotate overlay at 390x844.
+Canvas fills the viewport without scrolling. Full later-level UI audit pending.
+1.6.6: Continuous first-person game; camera movement is in-game. Complete
+one-hand traversal is not established by these checks.
+1.7.1: Final build/browser smoke checks passed, including pause and reload;
+34 portal/save regression checks cover host pause/audio, focus, ads and failures.
+Long-session stress and every possible browser transition remain unverified.
+1.7.2: Full 27-section completion not tested.
+1.7.3: Edge/Chromium tested. Native Firefox, Safari, macOS, physical Android/iOS
+and the full browser matrix not tested.
+1.8.1-1.8.2: No video playback feature.
+
+2.1.1-2.1.3: Only Bridge interstitials, on level-complete/game-over screens.
+No custom ad-frequency timer. No active-play ad placement.
+2.1.4-2.1.5: Ad layout/orientation handled by Bridge; game declares landscape.
+2.1.6-2.1.7: Pause/mute and failed/unavailable ad recovery covered by regression
+checks; live paid-ad delivery was not triggered for testing.
+2.2.1-2.2.5,2.3.1-2.3.2,2.4.1-2.4.6: No rewarded offers, banners or purchases.
+The coin shop spends earned in-game currency only.
+2.5.1-2.5.2: No real-money rewards, withdrawals, gambling or lottery.
+
+3.1.1-3.1.3: Existing progression, 9 chambers with 3 crossings, movement/jump
+onboarding, coins, permanent upgrades, item mechanics and creature threat.
+3.2.1-3.2.3: Bridge-only WebGL storage, one initial batched read, versioned atomic
+record, serialized coalesced writes and retry. Reload/mute/CONTINUE tested in
+the final WebGL build. No PlayerPrefs in the WebGL save path.
+3.3.1-3.3.3: Existing imported recorded clips used; runtime synthesized audio
+removed. User mute button and preference retained. Subjective mix review pending.
+3.3.4-3.3.5: Initial platform mute, platform audio/pause events and focus handled.
+Combined pause/mute sources covered by regression checks.
+3.4.1-3.4.4: Language comes from Bridge; only EN declared, English fallback;
+no language selector and no browser/OS locale lookup in game code.
+3.5.1: DONT SPLASH in menu, build metadata and publication form.
+
+4.1.1-4.1.10: Reviewed game code/text and observed scenes; no restricted material
+identified. Existing stylized horror creature retained, no realistic gore added.
+4.2.1-4.2.5: Existing supplied assets retained; official Bridge MIT license
+included. No unrelated brand added. Independent ownership/license audit and
+exhaustive comparison with the entire Playgama catalog were not performed.
+4.3.1-4.3.2: Existing game-specific Unity scene/assets/UI retained. Publication
+covers are actual game renders with a text overlay; no generated raster artwork.
+4.4.1: No personal-data entry, account collection or social feature in game.
+5.1.1: Decompression Fallback enabled and confirmed by server archive analysis.
+
+Upload/publish evidence
+Application: cmw467piu0ggvha0hoq8qzzqq
+Archive: cmw47ahjg0fkugo0hfxq92e8q / processing DONE / state PASSED
+Bridge: FOUND / 2.4.0 / unity
+Publication: cmw47cm790h3hha0hhniavkz7 / PUBLISHED
+Live revision: cmw47cqd40flogo0hl0prfne0 (same archive)
+https://playgama.ai/play/titi3ujklln6vj
+Public page rendered the game menu successfully; no page errors.
+Catalog moderation: MODERATION_UNAVAILABLE, catalogAvailable=false.
+
+Reproduction
+Run Tests/Run-PortalChecks.ps1 with UnityEditorDirectory set to the installed
+Unity 6000.3.24f1 Editor folder. Build through Dont Splash > Build Playgama release.
+Use the Playgama archive QA tool for host controls and cross-device testing:
+https://developer.playgama.com/qa-tool/cmw47ahjg0fkugo0hfxq92e8q

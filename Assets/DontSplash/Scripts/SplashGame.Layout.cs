@@ -217,7 +217,7 @@ public sealed partial class SplashGame {
    eye.transform.position-=eye.transform.forward*.12f*recoil;
    eye.transform.rotation*=Quaternion.Euler(-5*recoil,0,3*recoil);
   }
-  if(catchHit&&catchClock-catchFadeStarted>=.65f){deaths++;mode=Mode.Dead;portal.StopPlay();CursorState(false);}
+  if(catchHit&&catchClock-catchFadeStarted>=.65f){deaths++;mode=Mode.Dead;portal.StopPlay();CursorState(false);portal.ShowBreakAd("game_over");}
  }
 }
 }
