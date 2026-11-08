@@ -13,7 +13,7 @@ namespace Layer_lab._3D_Casual_Character
 
         public void Init()
         {
-            PartsArray = FindObjectsOfType<Parts>();
+            PartsArray = FindObjectsByType<Parts>(FindObjectsSortMode.InstanceID);
             foreach (var t in PartsArray)
             {
                 var buttonParts = Instantiate(button, content, false);

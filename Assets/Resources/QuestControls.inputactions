@@ -420,7 +420,7 @@
         {
           "name": "",
           "id": "51264c25-753a-4bbb-b5cd-1da6d6121cfc",
-          "path": "<XRController>{RightHand}/{TriggerButton}",
+          "path": "<XRController>{RightHand}/trigger",
           "interactions": "",
           "processors": "",
           "groups": "",
@@ -431,7 +431,7 @@
         {
           "name": "",
           "id": "8734fd38-1fb4-475f-a036-ceed2e39a4b6",
-          "path": "<XRController>{LeftHand}/{TriggerButton}",
+          "path": "<XRController>{LeftHand}/trigger",
           "interactions": "",
           "processors": "",
           "groups": "",

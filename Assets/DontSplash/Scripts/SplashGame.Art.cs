@@ -30,10 +30,11 @@ public sealed partial class SplashGame {
   grid.SetPixels(pixels);grid.Apply();
   tile.color=wallColors[theme];accent.color=MovingIntroduction?new Color(.25f,.67f,.9f):accents[theme];glow.color=new Color(.8f,.74f,.43f);glow.SetColor("_EmissionColor",new Color(.55f,.47f,.22f)*.35f);
   RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;
-  RenderSettings.fogStartDistance=stage==7?5:12;
+  RenderSettings.fogStartDistance=stage==7?4:9;
   RenderSettings.fogEndDistance=stage==7?22:stage==2?43:38;
-  eye.farClipPlane=RenderSettings.fogEndDistance+8;
-  Color mist=stage==7?new Color(.16f,.17f,.1f):new Color(.64f,.63f,.46f);
+  eye.farClipPlane=RenderSettings.fogEndDistance+16;
+  Shader.SetGlobalVector("_DSFogDistances",new Vector4(RenderSettings.fogStartDistance,RenderSettings.fogEndDistance,1,0));
+  Color mist=stage==7?new Color(.16f,.17f,.13f):new Color(.48f,.50f,.43f);
   RenderSettings.fogColor=mist;eye.backgroundColor=mist;if(water.HasProperty("_MistColor")){water.SetColor("_MistColor",mist);water.SetFloat("_FogNear",RenderSettings.fogStartDistance);water.SetFloat("_FogFar",RenderSettings.fogEndDistance);}
   RenderSettings.ambientLight=new Color(.65f,.6f,.38f)*(stage==7?.35f:.85f);
   if(!ceilingLight)ceilingLight=GameObject.Find("Ceiling bounce").GetComponent<Light>();

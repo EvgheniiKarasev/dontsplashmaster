@@ -21,6 +21,22 @@ public sealed partial class SplashGame {
  LineRenderer vrRay;
  Material vrRayMaterial, vrComfortMaterial;
  Button vrHovered, vrPressed;
+ Button vrNavigationButton;
+ bool vrMenuStickReady,vrMenuPointerReady,vrMenuSelectHeld;
+ sealed class MenuButtonLatch {public bool armed=true,held;}
+ readonly Dictionary<string,MenuButtonLatch> vrMenuButtons=new Dictionary<string,MenuButtonLatch>();
+ bool VRMenuPressed(string name){
+  if(!vrMenuButtons.TryGetValue(name,out var latch)){latch=new MenuButtonLatch();vrMenuButtons.Add(name,latch);}
+  bool tracked=VRHeld((name=="Menu"||name=="Recenter"?"Left":"Right")+"Tracked");
+  bool value=VRHeld(name);
+  if(!VRMenuCanInteract||!tracked){latch.armed=false;latch.held=value;return false;}
+  if(!value)latch.armed=true;
+  bool down=latch.armed&&value&&!latch.held;latch.held=value;return down;
+ }
+ void ResetVRMenuInput(){
+  foreach(string name in new[]{"Pause","Menu","Recenter","Jump"})vrMenuButtons[name]=new MenuButtonLatch{armed=false};
+  vrMenuStickReady=vrMenuPointerReady=vrMenuSelectHeld=false;vrNavigationButton=null;
+ }
  Button[] vrButtons;
  PointerEventData vrPointerData;
  Material vrUI,vrWristUI;
@@ -40,6 +56,7 @@ public sealed partial class SplashGame {
   if(preview)vrPreview=true;
   if(vr||(!preview&&!XRSettings.isDeviceActive))return;
   Application.runInBackground=true;
+  ConfigureVRFocusPolicy();
   vr=true;touchMode=false;Application.targetFrameRate=72;
   vrActions=Resources.Load<InputActionAsset>("QuestControls");vrActions.Enable();
   vrOrigin=new GameObject("XR tracking space").transform;vrOrigin.SetParent(body.transform,false);
@@ -47,6 +64,9 @@ public sealed partial class SplashGame {
   eye.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>().renderPostProcessing=false;
   vrLeft=CreateVRHand("Left",out vrLeftGrip,out vrLeftAnimator);
   vrRight=CreateVRHand("Right",out vrRightGrip,out vrRightAnimator);
+  vrLeftGrasp=new VRGrasp(vrLeftGrip,false);vrRightGrasp=new VRGrasp(vrRightGrip,true);
+  // Solve the three grip poses during setup, not on the first throw frame.
+  vrRightGrasp.ApplyPose(0);vrRightGrasp.ApplyPose(1);vrLeftGrasp.ApplyPose(2);
   foreach(var bone in vrRightGrip.GetComponentsInChildren<Transform>())if(bone.name=="XRHand_Palm")vrRightPalm=bone;
   foreach(var bone in vrLeftGrip.GetComponentsInChildren<Transform>()){
    if(bone.name=="XRHand_Palm")vrPalm=bone;
@@ -65,7 +85,7 @@ public sealed partial class SplashGame {
   shade.transform.localPosition=Vector3.forward*.12f;shade.transform.localScale=Vector3.one*2;
   vrComfortMaterial=new Material(Shader.Find("DontSplash/VRComfort"));shade.GetComponent<Renderer>().sharedMaterial=vrComfortMaterial;
   shade.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
-  Application.onBeforeRender+=UpdateVRPose;
+  Application.onBeforeRender+=BeforeRenderVR;
   ConfigureVRCanvas();UpdateVRPose();ResetVRPosition();
   Cursor.lockState=CursorLockMode.None;Cursor.visible=false;
  }
@@ -88,7 +108,11 @@ public sealed partial class SplashGame {
  }
  void RefreshVRUI(){
   if(!vr||!uiRoot)return;
-  vrButtons=uiRoot.GetComponentsInChildren<Button>(true);vrPressed=null;vrHovered=null;
+  CancelVRPointer();vrNavigationButton=null;vrMenuStickReady=vrMenuPointerReady=vrMenuSelectHeld=false;
+  // A held jump/confirm must not activate the newly opened menu.
+  vrMenuButtons["Jump"]=new MenuButtonLatch{armed=false};
+  if(EventSystem.current)EventSystem.current.SetSelectedGameObject(null);
+  vrButtons=uiRoot.GetComponentsInChildren<Button>(true);
   if(!vrUI)vrUI=new Material(Shader.Find("DontSplash/VRUI"));
   if(!vrWristUI){vrWristUI=new Material(Shader.Find("DontSplash/VRUI")){renderQueue=3150};vrWristUI.SetFloat("_ZTest",4);}
   foreach(var graphic in uiRoot.GetComponentsInChildren<Graphic>(true)){
@@ -105,21 +129,32 @@ public sealed partial class SplashGame {
  }
  void UpdateVRPose(){
   if(!vr||!eye||vrActions==null)return;
-  PollXRInputFocus();
   if(!vrOriginReady){
    SubsystemManager.GetSubsystems(vrSubsystems);
    foreach(var subsystem in vrSubsystems)if(subsystem.running){
     bool floor=subsystem.TrySetTrackingOriginMode(TrackingOriginModeFlags.Floor);
-    vrOrigin.localPosition=new Vector3(0,floor?0:1.6f,0);vrOriginReady=true;break;
+    vrOrigin.localPosition=new Vector3(0,floor?0:1.6f,0);subsystem.trackingOriginUpdated+=OnVRTrackingOriginChanged;vrOriginReady=true;break;
    }
   }
-  if(VRHeld("HeadTracked")){
-   eye.transform.localPosition=VA("HeadPosition").ReadValue<Vector3>();eye.transform.localRotation=VA("HeadRotation").ReadValue<Quaternion>();
+  if(ReadValidVRHeadPose(out var headPosition,out var headRotation)){
+   eye.transform.localPosition=headPosition;eye.transform.localRotation=headRotation;
    if(!vrHeadReady){vrHeadReady=true;ResetVRPosition();}
   }
   if(SystemSuspended){HideVRInteraction();return;}
   UpdateVRHand(vrLeft,"Left");UpdateVRHand(vrRight,"Right");
   UpdateVRGrip(vrLeftGrip,vrLeftAnimator,"Left");UpdateVRGrip(vrRightGrip,vrRightAnimator,"Right");
+ }
+ void BeforeRenderVR(){
+  // Late tracking must not change pause/input state after Update/LateUpdate.
+  UpdateVRPose();if(!vr||SystemSuspended)return;
+  if(mode==Mode.Play)UpdateVRHeldItems();
+  if(!vrRay.enabled||!vrRight.gameObject.activeSelf)return;
+  var ray=new Ray(vrRight.position,vrRight.forward);
+  var plane=new Plane(uiCanvas.transform.forward,uiCanvas.transform.position);
+  Vector3 end=ray.GetPoint(4);
+  if(plane.Raycast(ray,out float distance)&&distance<6)end=ray.GetPoint(distance);
+  vrRay.SetPosition(0,ray.origin);vrRay.SetPosition(1,end);
+  if(vrCursor.gameObject.activeSelf)vrCursor.position=end-uiCanvas.transform.forward*.006f;
  }
  void UpdateVRHand(Transform hand,string side){
   bool tracked=VRHeld(side+"Tracked");hand.gameObject.SetActive(tracked);
@@ -134,8 +169,9 @@ public sealed partial class SplashGame {
   // Menu input belongs to the right hand. Some simulator presets send the
   // same keyboard/mouse press to both controllers; the left stays relaxed.
   if(menu){if(!right){flex=0;pinch=0;}else pinch=Mathf.Max(pinch,VRHeld("Select")?1:0);}
-  else if(right?vrHeldItem!=null:vrHeldFlare!=null){flex=Mathf.Max(flex,.72f);pinch=1;}
-  animator.SetFloat("Flex",VRHandFlex(flex,vrHandMotion,Time.unscaledTime,side=="Right"));animator.SetFloat("Pinch",pinch);
+  bool holding=!menu&&(right?vrHeldItem!=null:vrHeldFlare!=null);
+  if(holding){flex=right?(vrHeldItem.pebble?.58f:.72f):.68f;pinch=1;}
+  animator.SetFloat("Flex",holding?flex:VRHandFlex(flex,vrHandMotion,Time.unscaledTime,right));animator.SetFloat("Pinch",pinch);
   animator.SetLayerWeight(animator.GetLayerIndex("Point Layer"),1-pinch);
  }
  float VRHandFlex(float input,float motion,float time,bool right){
@@ -148,9 +184,9 @@ public sealed partial class SplashGame {
  void ResetVRPosition(){
   if(!vr)return;
   CancelVRThrows();
-  if(VRHeld("HeadTracked")){
-   eye.transform.localPosition=VA("HeadPosition").ReadValue<Vector3>();
-   eye.transform.localRotation=VA("HeadRotation").ReadValue<Quaternion>();
+  if(ReadValidVRHeadPose(out var headPosition,out var headRotation)){
+   eye.transform.localPosition=headPosition;
+   eye.transform.localRotation=headRotation;
   }
   body.transform.rotation=Quaternion.identity;
   vrOrigin.localRotation=Quaternion.Euler(0,-eye.transform.localEulerAngles.y,0);
@@ -160,22 +196,28 @@ public sealed partial class SplashGame {
  }
  void TickVR(){
   TryInitializeVR();if(!vr)return;
+  PollXRInputFocus();
   vrHandMotion=Mathf.MoveTowards(vrHandMotion,mode==Mode.Play?Mathf.Clamp01(move.magnitude):0,Time.unscaledDeltaTime*4);
   UpdateVRPose();
-  vrTrackingAvailable=VRHeld("HeadTracked");
+  vrTrackingAvailable=ReadValidVRHeadPose(out _,out _);
   var head=UnityEngine.XR.InputDevices.GetDeviceAtXRNode(XRNode.Head);
-  if(!vrPreview&&head.TryGetFeatureValue(UnityEngine.XR.CommonUsages.userPresence,out bool present)&&!present)vrTrackingAvailable=false;
+  if(!vrPreview&&!xrSessionOwnsFocus&&head.TryGetFeatureValue(UnityEngine.XR.CommonUsages.userPresence,out bool present))SetXRUserPresence(present);
+  StepVRHandoff(Mathf.Min(Time.unscaledDeltaTime,.05f));
   RefreshSystemPause();UpdateVRInputGate();
-  if(!VRCanInteract)return;
-  if(VRPressed("Pause")||VRPressed("Menu")){
+  TraceVRSession();
+  // Sample both buttons even if the other is down. Separate latches prevent
+  // simultaneous B/menu presses or stale input-update edges from toggling twice.
+  bool pausePressed=VRMenuPressed("Pause"),menuPressed=VRMenuPressed("Menu"),recenterPressed=VRMenuPressed("Recenter");
+  if(!VRMenuCanInteract)return;
+  if(pausePressed||menuPressed){
    if(mode==Mode.Play)Pause();else if(mode==Mode.Shop)CloseShop();else if(mode==Mode.Pause&&!codeOpen)Resume();
   }
-  if(VRPressed("Recenter"))vrPanelMode=(Mode)(-1);
+  if(recenterPressed)vrPanelMode=(Mode)(-1);
   // Move the capsule through collision detection, then compensate the tracking space.
   // Changing capsule.center directly would let room-scale walking bypass walls.
-  Vector3 local=body.transform.InverseTransformPoint(eye.transform.position);
-  body.height=Mathf.Clamp(local.y+.12f,.7f,2.3f);body.center=Vector3.up*(body.height*.5f);
-  if(mode==Mode.Play){
+  if(mode==Mode.Play&&VRCanInteract){
+   Vector3 local=body.transform.InverseTransformPoint(eye.transform.position);
+   body.height=Mathf.Clamp(local.y+.12f,.7f,2.3f);body.center=Vector3.up*(body.height*.5f);
    Vector3 delta=Vector3.ProjectOnPlane(eye.transform.position-body.transform.position,Vector3.up);
    if(delta.sqrMagnitude>.000001f){body.Move(delta);vrOrigin.position-=delta;}
   }
@@ -199,9 +241,11 @@ public sealed partial class SplashGame {
  }
  void LateVR(){
   if(!vr)return;
+  uiCanvas.enabled=!vrHandoffPending&&xrUserPresent;
   if(SystemSuspended){HideVRInteraction();return;}
   if(mode!=Mode.Play)CancelVRThrows();else UpdateVRHeldItems();
   bool menu=mode!=Mode.Play&&mode!=Mode.Caught;
+  if(monster)monster.gameObject.SetActive(mode!=Mode.Dead);
   // Menus must remain readable through scenery/the frozen death animation.
   // Their hands are kept in front of the panel and rendered after its graphics.
   // The hand shader still depth-tests against the world; gameplay uses normal depth.
@@ -211,8 +255,9 @@ public sealed partial class SplashGame {
    vrPanelMode=mode;vrPressed=null;vrHovered=null;
    PlaceVRMenu();
   }
-  if(menu)KeepVRMenuReachable();
-  else uiCanvas.transform.SetPositionAndRotation(eye.transform.position+eye.transform.forward*1.1f,eye.transform.rotation);
+  // Anchor menus once in the room. Hands/head movement must never chase the panel.
+  // X explicitly brings it back if the player walks away or turns around.
+  if(!menu)uiCanvas.transform.SetPositionAndRotation(eye.transform.position+eye.transform.forward*1.1f,eye.transform.rotation);
   uiCanvas.transform.localScale=Vector3.one*(menu?.0015f:.0011f);
   UpdateVRWrist();
   if(deathBlackout)deathBlackout.color=Color.clear;
@@ -227,16 +272,6 @@ public sealed partial class SplashGame {
   if(forward.sqrMagnitude<.01f)forward=Vector3.forward;
   uiCanvas.transform.SetPositionAndRotation(eye.transform.position+forward*1.5f,Quaternion.LookRotation(forward));
  }
- void KeepVRMenuReachable(){
-  var panel=uiCanvas.transform;Vector3 normal=panel.forward;
-  float headDistance=Vector3.Dot(panel.position-eye.transform.position,normal);
-  if(headDistance<.9f||Vector3.Distance(panel.position,eye.transform.position)>3){PlaceVRMenu();normal=panel.forward;}
-  // Tracked hands cannot be stopped by a collider. Keep the menu beyond both
-  // aim poses and the full hand meshes, so a forward ray stays in front of it.
-  float advance=Mathf.Max(Mathf.Max(VRHandClearance(vrLeft),VRHandClearance(vrRight)),Mathf.Max(VRHandClearance(vrLeftGrip),VRHandClearance(vrRightGrip)));
-  if(advance>0)panel.position+=normal*advance;
- }
- float VRHandClearance(Transform hand)=>hand.gameObject.activeSelf?Mathf.Max(0,Vector3.Dot(hand.position-uiCanvas.transform.position,uiCanvas.transform.forward)+.3f):0;
  void UpdateVRWrist()=>TickVRWrist(Time.unscaledDeltaTime);
  void TickVRWrist(float dt){
   if(!vrWrist)return;
@@ -259,12 +294,15 @@ public sealed partial class SplashGame {
   vrWrist.localScale=Vector3.one*(.0007f*show/uiCanvas.transform.localScale.x);
  }
  void TickVRPointer(bool menu){
+  var previousMode=mode;
+  if(menu&&VRMenuCanInteract)TickVRMenuNavigation();
+  if(mode!=previousMode){CancelVRPointer();return;}
   // Transparent sorting order takes precedence over shader queue. Match the
   // canvas layer and draw the line AND cursor after every menu graphic/hand.
   vrRay.sortingLayerID=uiCanvas.sortingLayerID;vrRay.sortingOrder=uiCanvas.sortingOrder+3;
   var cursorRenderer=vrCursor.GetComponent<Renderer>();
   cursorRenderer.sortingLayerID=uiCanvas.sortingLayerID;cursorRenderer.sortingOrder=uiCanvas.sortingOrder+4;
-  vrRay.enabled=menu&&VRCanInteract&&vrRight.gameObject.activeSelf;
+  vrRay.enabled=menu&&VRMenuCanInteract&&vrRight.gameObject.activeSelf;
   vrCursor.gameObject.SetActive(false);
   if(!vrRay.enabled||vrButtons==null){CancelVRPointer();return;}
   var ray=new Ray(vrRight.position,vrRight.forward);var plane=new Plane(uiCanvas.transform.forward,uiCanvas.transform.position);
@@ -283,17 +321,46 @@ public sealed partial class SplashGame {
   vrRay.SetPosition(0,ray.origin);vrRay.SetPosition(1,end);
   vrRay.startColor=vrRay.endColor=hit?new Color(1,.85f,.3f):new Color(.65f,1,.85f);
   vrCursor.localScale=Vector3.one*(hit?.024f:.014f);
+  bool select=VRHeld("Select");
+  if(!select)vrMenuPointerReady=true;
+  bool down=vrMenuPointerReady&&select&&!vrMenuSelectHeld,up=!select&&vrMenuSelectHeld;
+  vrMenuSelectHeld=select;
+  if(down&&vrNavigationButton){vrNavigationButton=null;if(EventSystem.current)EventSystem.current.SetSelectedGameObject(null);}
+  if(vrNavigationButton){vrRay.enabled=false;vrCursor.gameObject.SetActive(false);hit=null;}
   if(vrPointerData==null)vrPointerData=new PointerEventData(EventSystem.current){button=PointerEventData.InputButton.Left};
   var data=vrPointerData;
   if(hit!=vrHovered){
    if(vrHovered)ExecuteEvents.Execute(vrHovered.gameObject,data,ExecuteEvents.pointerExitHandler);
    vrHovered=hit;if(hit)ExecuteEvents.Execute(hit.gameObject,data,ExecuteEvents.pointerEnterHandler);
   }
-  if(VRPressed("Select")){vrPressed=hit;if(hit)ExecuteEvents.Execute(hit.gameObject,data,ExecuteEvents.pointerDownHandler);}
-  if(VA("Select").WasReleasedThisFrame()){
+  if(down){vrPressed=hit;if(hit)ExecuteEvents.Execute(hit.gameObject,data,ExecuteEvents.pointerDownHandler);}
+  if(up){
    var pressed=vrPressed;vrPressed=null;
    if(pressed){ExecuteEvents.Execute(pressed.gameObject,data,ExecuteEvents.pointerUpHandler);if(pressed==hit)ExecuteEvents.Execute(pressed.gameObject,data,ExecuteEvents.pointerClickHandler);}
   }
+ }
+ void TickVRMenuNavigation(){
+  if(vrButtons==null)return;
+  Vector2 left=VRHeld("LeftTracked")?VA("Move").ReadValue<Vector2>():Vector2.zero,right=VRHeld("RightTracked")?VA("Turn").ReadValue<Vector2>():Vector2.zero;
+  Vector2 stick=left.sqrMagnitude>right.sqrMagnitude?left:right;
+  if(stick.magnitude<.3f)vrMenuStickReady=true;
+  if(vrMenuStickReady&&stick.magnitude>.65f){
+   vrMenuStickReady=false;
+   var current=vrNavigationButton?vrNavigationButton:vrHovered;
+   Button next=null;float best=float.PositiveInfinity;
+   Vector2 direction=Mathf.Abs(stick.y)>=Mathf.Abs(stick.x)?new Vector2(0,Mathf.Sign(stick.y)):new Vector2(Mathf.Sign(stick.x),0);
+   foreach(var button in vrButtons){
+    if(!button||!button.gameObject.activeInHierarchy||!button.enabled||!button.IsInteractable()||button==current)continue;
+    if(!current){next=button;break;}
+    Vector2 delta=uiCanvas.transform.InverseTransformPoint(button.transform.position)-uiCanvas.transform.InverseTransformPoint(current.transform.position);
+    float along=Vector2.Dot(delta,direction);if(along<=1)continue;
+    float score=delta.sqrMagnitude/along;if(score<best){best=score;next=button;}
+   }
+   if(next){CancelVRPointer();vrNavigationButton=next;if(EventSystem.current)EventSystem.current.SetSelectedGameObject(next.gameObject);}
+  }
+  var selected=vrNavigationButton?vrNavigationButton:vrHovered;
+  bool submit=VRMenuPressed("Jump");
+  if(selected&&submit)selected.onClick.Invoke();
  }
  void CancelVRPointer(){
   if(vrPointerData!=null){
@@ -303,7 +370,8 @@ public sealed partial class SplashGame {
   vrPressed=null;vrHovered=null;
  }
  void DisposeVR(){
-  Application.onBeforeRender-=UpdateVRPose;
+  DisposeVRFocusPolicy();foreach(var subsystem in vrSubsystems)subsystem.trackingOriginUpdated-=OnVRTrackingOriginChanged;
+  Application.onBeforeRender-=BeforeRenderVR;
   if(vrActions)vrActions.Disable();if(vrRayMaterial)Destroy(vrRayMaterial);if(vrComfortMaterial)Destroy(vrComfortMaterial);
   if(vrUI)Destroy(vrUI);if(vrWristUI)Destroy(vrWristUI);
   foreach(var material in vrFonts.Values)Destroy(material);foreach(var material in vrWristFonts.Values)Destroy(material);

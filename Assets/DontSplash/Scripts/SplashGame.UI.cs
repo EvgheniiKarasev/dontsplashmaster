@@ -82,6 +82,7 @@ public sealed partial class SplashGame {
   Resume();
  }
  float nextUIRefresh; Mode lastUIMode;
+ string UIStateKey(Rect safe,int width,int height)=>mode+"/"+codeOpen+"/"+touchMode+"/"+(vr?"VR":width+"/"+height)+"/"+safe+"/"+confirmNewRun+"/"+(mode==Mode.Menu&&HasSavedRun);
  void SyncUI(){
   if(mode==lastUIMode&&Time.unscaledTime<nextUIRefresh&&mode!=Mode.Caught)return;
   lastUIMode=mode;nextUIRefresh=Time.unscaledTime+.1f;
@@ -89,7 +90,9 @@ public sealed partial class SplashGame {
   // Covers the whole display, including outside the safe area; menus render above it.
   if(deathBlackout)deathBlackout.color=new Color(0,0,0,mode==Mode.Dead?1:mode==Mode.Caught?CatchBlackout:0);
   Rect safe=vr?new Rect(0,0,1000,650):Screen.safeArea;uiScale=Mathf.Max(.1f,Mathf.Min(safe.width/1000f,safe.height/650f));uw=safe.width/uiScale;uh=safe.height/uiScale;
-  string key=mode+"/"+codeOpen+"/"+touchMode+"/"+Screen.width+"/"+Screen.height+"/"+safe;
+  // World-space VR layout is fixed; XR render-target changes must not destroy
+  // the button being pressed or rebuild all UI/font materials during a pause.
+  string key=UIStateKey(safe,Screen.width,Screen.height);
   if(key!=uiKey){
    uiKey=key;lastSafe=safe;uiScaler.scaleFactor=uiScale;
    if(uiRoot){uiRoot.gameObject.SetActive(false);Destroy(uiRoot.gameObject);}
@@ -119,10 +122,17 @@ public sealed partial class SplashGame {
   UIPanel(new Rect(0,0,uw,uh),new Color(.055f,.05f,.025f,.88f));
   float x=uw/2-290,y=uh/2-275;
   UIPanel(new Rect(x-25,y-15,630,580),new Color(.2f,.19f,.12f,.97f));
-  Heading(new Rect(x,y+8,580,85),mode==Mode.Menu?"DONT SPLASH":codeOpen?"EMERGENCY EXIT":mode==Mode.Win?"SURFACE REACHED":mode==Mode.Dead?"IT HEARD YOU":mode==Mode.Between&&FirstGiftPending?"FIRST CROSSING!":mode==Mode.Between?"SECTOR CLEAR":"PAUSED");
+  Heading(new Rect(x,y+8,580,85),mode==Mode.Menu?"Don't Get Wet!":codeOpen?"EMERGENCY EXIT":mode==Mode.Win?"SURFACE REACHED":mode==Mode.Dead?"IT HEARD YOU":mode==Mode.Between&&FirstGiftPending?"FIRST CROSSING!":mode==Mode.Between?"SECTOR CLEAR":"PAUSED");
   if(mode==Mode.Menu){
-   UILabel(new Rect(x+20,y+145,540,vr?120:60),vr?"LEFT STICK: move   RIGHT STICK: snap turn\nA: jump   B: pause   X: bring menu here\nHOLD TRIGGER: right bottle / left flare\nSwing + release to throw   LEFT GRIP: use":"Keep the water quiet.",vr?20:26).alignment=TextAlignmentOptions.Center;
-   UIButton(new Rect(x+110,y+410,360,65),"PLAY",()=>StartRun(false));
+   UILabel(new Rect(x+20,y+145,540,vr?150:60),vr?"LEFT STICK: move   RIGHT STICK: snap turn\nA: jump   B: pause   X: bring menu here\nHOLD FRONT TRIGGER: right bottle / left flare\nSwing + release to throw   LEFT GRIP: use\nMENUS: point + trigger, or stick + A":"Keep the water quiet.",vr?20:26).alignment=TextAlignmentOptions.Center;
+   if(confirmNewRun){
+    UILabel(new Rect(x+20,y+300,540,45),"Replace this run? Permanent upgrades stay.",20).alignment=TextAlignmentOptions.Center;
+    UIButton(new Rect(x+20,y+380,260,65),"CANCEL",()=>confirmNewRun=false);
+    UIButton(new Rect(x+300,y+380,260,65),"START NEW RUN",()=>StartRun(false));
+   }else if(HasSavedRun){
+    UIButton(new Rect(x+110,y+325,360,65),"CONTINUE",()=>StartRun(true));
+    UIButton(new Rect(x+110,y+410,360,65),"NEW RUN",()=>confirmNewRun=true);
+   }else UIButton(new Rect(x+110,y+410,360,65),"PLAY",()=>StartRun(false));
   }else if(mode==Mode.Between&&FirstGiftPending){
    UILabel(new Rect(x+20,y+120,540,85),"Choose a free permanent upgrade.",25).alignment=TextAlignmentOptions.Center;
    UIButton(new Rect(x+20,y+245,260,75),jumpLevel<3?"HIGHER JUMP":"2 EXTRA FLARES",()=>ClaimFirstGift(true));
@@ -174,7 +184,7 @@ public sealed partial class SplashGame {
   }
   return graphic;
  }
- void ToggleSound(){muted=!muted;AudioListener.volume=muted?0:1;}
+ void ToggleSound(){muted=!muted;AudioListener.volume=muted?0:1;PlayerPrefs.SetInt("DS.Muted",muted?1:0);PlayerPrefs.Save();}
  void BuildHUD(){
   if(!vr){
   hudStats=UILabel(new Rect(28,22,160,46),"",32,true);

@@ -66,7 +66,7 @@ public sealed partial class SplashGame {
   }
  }
  const float WaterY=.10f;
- int lastRoomReward,pebbleSkips;float pebbleTimer;Vector3 pebblePoint,pebbleDirection;
+ int lastRoomReward;
  class BonusCoin {public Transform visual;public string key;public Vector3 home;}
  readonly System.Collections.Generic.List<BonusCoin> bonusCoins=new System.Collections.Generic.List<BonusCoin>();
  int coins,reserveFlares,reserveBottles,speedLevel,jumpLevel,rangeLevel,flareLevel;
@@ -96,6 +96,7 @@ public sealed partial class SplashGame {
  }
  void RewardCheckpoint(){
   int earned=RewardOnce("CP"+checkpointIndex,40);
+  Save();
   Notice(earned>0?"CHECKPOINT  +40 COINS  /  balance "+coins:"CHECKPOINT SAVED  /  reward already collected");
  }
  void RewardRoom(){
@@ -148,10 +149,6 @@ public sealed partial class SplashGame {
  }
  void TickEconomy(float dt){
   TickAttempt();
-  if(pebbleSkips>0){
-   pebbleTimer-=dt;
-   if(pebbleTimer<=0){pebbleTimer=.4f;pebbleSkips--;pebblePoint+=pebbleDirection*1.8f;pebblePoint.x=Mathf.Clamp(pebblePoint.x,-HallWidth+4,HallWidth-4);pebblePoint.z=Mathf.Clamp(pebblePoint.z,5,EndZ-9);if(IsOpenWater(pebblePoint)){Noise(pebblePoint,4);Ripple(pebblePoint);}else pebbleSkips=0;}
-  }
   for(int i=bonusCoins.Count-1;i>=0;i--){
    var coin=bonusCoins[i];coin.visual.Rotate(0,0,dt*90,Space.Self);coin.visual.position=coin.home+Vector3.up*Mathf.Sin(simTime*2+i)*.1f;
    if(Vector3.Distance(body.transform.position+Vector3.up*.7f,coin.visual.position)<1){

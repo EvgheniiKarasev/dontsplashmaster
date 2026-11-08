@@ -10,6 +10,7 @@ Shader "DontSplash/PoolTiles" {
  #pragma multi_compile _ LIGHTMAP_ON
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+ #include "Atmosphere.hlsl"
  CBUFFER_START(UnityPerMaterial)
  half4 _BaseColor;
  CBUFFER_END
@@ -36,7 +37,7 @@ Shader "DontSplash/PoolTiles" {
   #else
    color*=hallLight;
   #endif
-  return half4(MixFog(color,i.fog),1);
+  return half4(_DSFogDistances.z>0?DSApplyFog(color,i.world):MixFog(color,i.fog),1);
  }
  ENDHLSL
  }

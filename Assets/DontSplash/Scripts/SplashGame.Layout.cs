@@ -12,8 +12,6 @@ public sealed partial class SplashGame {
     Vector3 pos=new Vector3(0,.1f,7+i*5),size=new Vector3(4,.65f,3.5f);
     var platform=Shape("First jumps "+(i+1),pos,size,tile);
     steps.Add(new Step{t=platform.transform,home=pos,size=size});
-    var edge=Shape("Entrance highlight",pos+new Vector3(0,.34f,-1.65f),new Vector3(4,.025f,.12f),brass,false);
-    edge.transform.SetParent(platform.transform,true);
    }
    PlaceBonusCoin(new Vector3(0,1.05f,17),"FirstJumps");
   }
@@ -54,8 +52,6 @@ public sealed partial class SplashGame {
       if(MovingIntroduction&&k>0&&k<count&&index%3==1){kind=1;size.x=3.4f;}
       var platform=Shape("Route "+(lane+1)+" step "+index,pos,size,kind==2?danger:kind==1?accent:tile);
       steps.Add(new Step{t=platform.transform,home=pos,size=size,kind=kind,phase=index*.8f});
-      var trim=Shape("Worn edge",pos+new Vector3(0,.34f,-size.z*.5f+.1f),new Vector3(size.x,.025f,.09f),accent,false);
-      trim.transform.SetParent(platform.transform,true);
       if(stage==6&&index%11==5){var crusher=Shape("Pressure piston",pos+Vector3.up*4.9f,new Vector3(3.4f,3,1.2f),danger,false);crushers.Add(crusher.transform);}
       index++;
      }
@@ -148,9 +144,9 @@ public sealed partial class SplashGame {
  }
  bool creatureRevealed,catchStrikeStarted,catchHit;float catchClock,catchFadeStarted;
  float CatchBlackout=>catchHit?Mathf.SmoothStep(0,1,(catchClock-catchFadeStarted)/.65f):0;Vector3 catchStart;Quaternion catchRotation;
- Vector3 patrolCenter;float pursuit;
- Vector3 vrCatchDirection;
- void ParkCreature(){creatureRevealed=true;pursuit=0;patrolCenter=new Vector3(0,WaterY-.6f,EndZ*.5f);monster.position=patrolCenter;}
+ Vector3 patrolCenter,creatureVelocity;float pursuit;
+ Vector3 vrCatchDirection,vrCatchTarget,vrCatchTargetVelocity;
+ void ParkCreature(){creatureRevealed=true;pursuit=0;creatureVelocity=Vector3.zero;patrolCenter=new Vector3(0,WaterY-.6f,EndZ*.5f);monster.position=patrolCenter;}
  void RevealCreature(Vector3 noise){
   if(creatureRevealed||!monster)return;
   creatureRevealed=true;
@@ -161,13 +157,22 @@ public sealed partial class SplashGame {
   monster.position=p;monster.LookAt(new Vector3(noise.x,p.y,noise.z));
  }
  const float CreatureStandOff=1.55f;
+ bool PlayerInWater=>body.transform.position.y<WaterY-.05f;
+ bool CreatureCanCatch=>PlayerInWater&&vertical<=0;
  void TickCreature(float dt){
   heard-=dt;attackRecovery-=dt;pursuit=Mathf.Max(0,pursuit-dt);if(wet>0)pursuit=1.4f;
   if(wet>0&&heard<=0){Noise(body.transform.position,3);}
   if(!creatureRevealed){ParkCreature();creature.Tick(dt,false,false,false,100,0);return;}
   Vector3 target=pursuit>0?body.transform.position:heard>0?sound:patrolCenter+new Vector3(Mathf.Sin(simTime*.24f)*10,0,Mathf.Cos(simTime*.24f)*6);
   target.y=WaterY-.6f;Vector3 old=monster.position;
-  Vector3 next=stun<=0?Vector3.MoveTowards(old,target,(heard>0||pursuit>0?18:5)*dt):old;
+  Vector3 toTarget=Vector3.ProjectOnPlane(target-old,Vector3.up);
+  float stop=pursuit>0?CreatureStandOff:0;
+  float remaining=Mathf.Max(0,toTarget.magnitude-stop);
+  float desiredSpeed=Mathf.Min(heard>0||pursuit>0?14:5,remaining*4);
+  if(remaining<.025f)desiredSpeed=0;
+  creatureVelocity=stun>0?Vector3.zero:Vector3.MoveTowards(creatureVelocity,toTarget.normalized*desiredSpeed,24*dt);
+  Vector3 displacement=Vector3.ClampMagnitude(creatureVelocity*dt,remaining);
+  Vector3 next=old+displacement;
   // Keep the entire approach outside the camera's personal space, even on dry tiles.
   Vector3 separation=Vector3.ProjectOnPlane(next-body.transform.position,Vector3.up);
   if(separation.sqrMagnitude<CreatureStandOff*CreatureStandOff){
@@ -177,30 +182,34 @@ public sealed partial class SplashGame {
    next.y=WaterY-.6f;
   }
   monster.position=next;
-  if(stun<=0){Vector3 dir=next-old;if(dir.sqrMagnitude>.000001f)monster.rotation=Quaternion.LookRotation(Vector3.ProjectOnPlane(dir,Vector3.up));}
+  // Face the destination, not the tiny collision correction at the stop radius.
+  if(stun<=0&&toTarget.sqrMagnitude>.01f)monster.rotation=Quaternion.RotateTowards(monster.rotation,Quaternion.LookRotation(toTarget),220*dt);
   float horizontalDistance=Vector3.ProjectOnPlane(monster.position-body.transform.position,Vector3.up).magnitude;
   float distance=Vector3.Distance(monster.position,body.transform.position);
   creature.Tick(dt,true,heard>0||pursuit>0,stun>0,distance,Vector3.Distance(old,monster.position)/Mathf.Max(dt,.001f));
-  if((wet>0||(pursuit>0&&!body.isGrounded))&&stun<=0&&horizontalDistance<=CreatureStandOff+.1f){BeginCatch();return;}
+  if(CreatureCanCatch&&stun<=0&&horizontalDistance<=CreatureStandOff+.1f){BeginCatch();return;}
 
  }
  void BeginCatch(){
   EndAttempt(false);
+  StopGameplaySounds();CancelVRThrows();creatureVelocity=Vector3.zero;
   mode=Mode.Caught;catchClock=0;catchStrikeStarted=catchHit=false;catchFadeStarted=0;catchStart=eye.transform.position;catchRotation=eye.transform.rotation;
   move=look=Vector2.zero;throwInput=flareInput=false;moveFinger=lookFinger=-1;
   Vector3 direction=Vector3.ProjectOnPlane(monster.position-body.transform.position,Vector3.up).normalized;
   if(direction.sqrMagnitude<.1f)direction=body.transform.forward;
   monster.position=body.transform.position+direction*CreatureStandOff;monster.position=new Vector3(monster.position.x,WaterY-.6f,monster.position.z);
   monster.rotation=Quaternion.LookRotation(-direction);
-  creature.ResetPose();creature.Hear();CursorState(true);
+  creature.ResetPose();creature.Tick(0,true,false,false,1,0);creature.InspectVictim(0);creature.Hear();CursorState(true);
   if(vr){
+   vrCatchTarget=eye.transform.position;vrCatchTargetVelocity=Vector3.zero;
    vrCatchDirection=Vector3.ProjectOnPlane(eye.transform.forward,Vector3.up).normalized;
    if(vrCatchDirection.sqrMagnitude<.01f)vrCatchDirection=body.transform.forward;
-   AlignVRCatch();
+   AlignVRCatch(0);
   }
  }
- void AlignVRCatch(){
-  Vector3 head=eye.transform.position;
+ void AlignVRCatch(float dt){
+  if(dt>0)vrCatchTarget=Vector3.SmoothDamp(vrCatchTarget,eye.transform.position,ref vrCatchTargetVelocity,.075f,3,dt);
+  Vector3 head=vrCatchTarget;
   monster.rotation=Quaternion.LookRotation(-vrCatchDirection,Vector3.up);
   float approach=catchStrikeStarted?Mathf.SmoothStep(0,1,creature.StrikeProgress):0;
   Vector3 faceTarget=head+vrCatchDirection*Mathf.Lerp(1.25f,.95f,approach);
@@ -215,7 +224,7 @@ public sealed partial class SplashGame {
   catchClock+=dt;
   float inspectDuration=deaths==0?2f:1.3f;
   if(!catchStrikeStarted&&catchClock>=inspectDuration){catchStrikeStarted=true;creature.BeginAttack();}
-  bool impact=false;
+  bool impact=false,wasHit=catchHit;
   if(!catchHit){
    impact=creature.Tick(dt,true,catchStrikeStarted,false,1,0);
    if(!catchStrikeStarted)creature.InspectVictim(Mathf.Clamp01(catchClock/inspectDuration));
@@ -223,7 +232,7 @@ public sealed partial class SplashGame {
   if(!catchHit&&(impact||catchClock>=inspectDuration+.85f)){
    catchHit=true;catchFadeStarted=catchClock;creature.PlayImpact();
   }
-  if(vr)AlignVRCatch();
+  if(vr&&!wasHit)AlignVRCatch(dt);
   if(!vr){
   Vector3 face=creature.FacePosition;
   Vector3 cameraPosition=face+monster.forward*1.25f+Vector3.up*.08f;

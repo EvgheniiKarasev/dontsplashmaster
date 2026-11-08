@@ -1,4 +1,4 @@
-﻿//Stylized Water 2
+//Stylized Water 2
 //Staggart Creations (http://staggart.xyz)
 //Copyright protected under Unity Asset Store EULA
 
@@ -172,13 +172,21 @@ namespace StylizedWater2
         
         //Handles correct behaviour when double-clicking a .watershader asset. Should open in the IDE
         [UnityEditor.Callbacks.OnOpenAsset]
+        #if UNITY_6000_3_OR_NEWER
+        public static bool OnOpenAsset(EntityId instanceID, int line)
+        #else
         public static bool OnOpenAsset(int instanceID, int line)
+        #endif
         {
+            #if UNITY_6000_3_OR_NEWER
+            Object target = EditorUtility.EntityIdToObject(instanceID);
+            #else
             Object target = EditorUtility.InstanceIDToObject(instanceID);
+            #endif
 
             if (target is Shader)
             {
-                var path = AssetDatabase.GetAssetPath(instanceID);
+                var path = AssetDatabase.GetAssetPath(target);
                 
                 if (Path.GetExtension(path) != "." + TARGET_FILE_EXTENSION) return false;
 

@@ -4,19 +4,27 @@ namespace DontSplash {
 public sealed partial class SplashGame {
  bool applicationFocused=true,applicationPaused,xrInputFocused=true,vrTrackingAvailable=true;
  bool systemSuspended,audioPausedBeforeSystem,vrInputReady=true,vrPreview;
+ bool xrSessionOwnsFocus;
  bool SystemSuspended=>systemSuspended;
  bool VRCanInteract=>!systemSuspended&&vrInputReady;
+ bool VRMenuCanInteract=>!systemSuspended;
 
  void OnApplicationFocus(bool focus){applicationFocused=focus;RefreshSystemPause();}
- void OnApplicationPause(bool pause){applicationPaused=pause;RefreshSystemPause();}
+ void OnApplicationPause(bool pause){applicationPaused=pause;if(pause){SaveActiveRun();BeginVRHandoff();}RefreshSystemPause();}
  void SetXRInputFocus(bool focus){xrInputFocused=focus;RefreshSystemPause();}
  void PollXRInputFocus(){
-  // No OVRManager is required by our OpenXR rig. Read the native input-focus
-  // flag: a system overlay need not cause OnApplicationPause/Focus callbacks.
-  if(vr&&!vrPreview&&OVRPlugin.initialized)SetXRInputFocus(OVRPlugin.hasInputFocus);
+  // Use the loader that actually owns this rig. An OVRPlugin query failure is
+  // indistinguishable from lost focus and can leave an OpenXR app locked out.
+  if(vr&&!vrPreview&&UnityEngine.XR.Management.XRGeneralSettings.Instance?.Manager?.activeLoader is UnityEngine.XR.OpenXR.OpenXRLoader){
+   SetXRSessionFocus(UnityEngine.XR.OpenXR.OpenXRUtility.IsSessionFocused);
+   SetXRUserPresence(UnityEngine.XR.OpenXR.OpenXRUtility.IsUserPresent);
+  }
  }
+ void SetXRSessionFocus(bool focus){xrSessionOwnsFocus=true;xrInputFocused=focus;}
  void RefreshSystemPause(){
-  bool suspended=applicationPaused||!applicationFocused||(vr&&(!xrInputFocused||!vrTrackingAvailable));
+  // Android window-focus callbacks can lag behind the XR session. A focused
+  // OpenXR session is authoritative; an OS pause still always suspends play.
+  bool suspended=applicationPaused||(!applicationFocused&&!xrSessionOwnsFocus)||(vr&&(!xrInputFocused||!vrTrackingAvailable||!xrUserPresent||vrHandoffPending));
   if(suspended==systemSuspended)return;
   systemSuspended=suspended;
   if(suspended){
@@ -24,11 +32,12 @@ public sealed partial class SplashGame {
    // Ordinary play resumes through RESUME. Caught/shop/other modes keep their
    // exact state; all their update/input paths are gated until focus returns.
    Pause();AudioListener.pause=true;
-   ClearGameplayInput();CancelVRThrows();CancelVRPointer();vrInputReady=false;vrSnapReady=false;
+   ClearGameplayInput();CancelVRThrows();CancelVRPointer();ResetVRMenuInput();vrInputReady=false;vrSnapReady=false;
    HideVRInteraction();
   }else{
    AudioListener.pause=audioPausedBeforeSystem||mode==Mode.Pause;
-   vrPanelMode=(Mode)(-1);
+   // Keep an already open menu anchored through brief tracking/focus changes.
+   // A new mode is placed by LateVR; X explicitly recentres an existing panel.
   }
  }
  void ClearGameplayInput(){

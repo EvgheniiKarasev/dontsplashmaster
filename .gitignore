@@ -6,6 +6,10 @@
 # See: https://github.com/github/gitignore/tree/main/Global
 #
 .utmp/
+# Permanent release signing keys and credentials must never be committed.
+/Signing/
+*.keystore
+*.jks
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/

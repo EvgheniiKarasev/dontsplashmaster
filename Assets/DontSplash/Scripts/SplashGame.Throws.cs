@@ -1,8 +1,24 @@
 using UnityEngine;
 namespace DontSplash {
 public sealed partial class SplashGame {
- sealed class ThrownItem {public Transform t;public GameObject bottle,stone;public Vector3 velocity,angularVelocity;public bool active,pebble,held,physicalThrow;public float age,nextImpact;}
+ sealed class ThrownItem {public Transform t;public GameObject bottle,vrBottle,stone;public Vector3 velocity,angularVelocity;public bool active,pebble,held,physicalThrow;public float age,nextImpact;}
  readonly ThrownItem[] thrown=new ThrownItem[4];
+ Mesh vrBottleMesh;
+ Mesh CreateVRBottleMesh(){
+  // 24 cm tall after the VR scale, 6.6 cm body, 2.7 cm neck.
+  // The source prop's oversized glass shell is unsuitable for a palm grip.
+  float[] heights={-.225f,-.215f,-.19f,.035f,.065f,.10f,.195f,.20f,.218f,.225f};
+  float[] radii={.049f,.06f,.062f,.062f,.052f,.025f,.025f,.028f,.028f,.024f};
+  const int sides=24;var vertices=new Vector3[heights.Length*sides+2];var triangles=new System.Collections.Generic.List<int>();
+  for(int ring=0;ring<heights.Length;ring++)for(int side=0;side<sides;side++){
+   float angle=side*2*Mathf.PI/sides;int current=ring*sides+side;vertices[current]=new Vector3(Mathf.Cos(angle)*radii[ring],heights[ring],Mathf.Sin(angle)*radii[ring]);
+   if(ring==0)continue;int next=ring*sides+(side+1)%sides;
+   triangles.Add(current-sides);triangles.Add(current);triangles.Add(next);triangles.Add(current-sides);triangles.Add(next);triangles.Add(next-sides);
+  }
+  int bottom=vertices.Length-2,top=vertices.Length-1;vertices[bottom]=Vector3.up*heights[0];vertices[top]=Vector3.up*heights[heights.Length-1];
+  for(int side=0;side<sides;side++){int next=(side+1)%sides;triangles.Add(bottom);triangles.Add(side);triangles.Add(next);int ring=(heights.Length-1)*sides;triangles.Add(top);triangles.Add(ring+next);triangles.Add(ring+side);}
+  var mesh=new Mesh{name="Quest bottle with narrow neck"};mesh.vertices=vertices;mesh.SetTriangles(triangles,0);mesh.RecalculateNormals();mesh.RecalculateBounds();return mesh;
+ }
  bool lookReady;float targetYaw,targetPitch,yawVelocity,pitchVelocity;
  // Modest 15% increase over the original input scale; retain short smoothing.
  const float MouseLookSensitivity=.1124125f,TouchLookSensitivity=.1587f,LookSmoothTime=.055f;
@@ -15,6 +31,7 @@ public sealed partial class SplashGame {
   body.transform.rotation=Quaternion.Euler(0,yaw,0);eye.transform.localRotation=Quaternion.Euler(pitch,0,0);
  }
  void InitializeThrows(){
+  vrBottleMesh=CreateVRBottleMesh();
   for(int i=0;i<thrown.Length;i++){
    var root=new GameObject("Pooled thrown item");root.transform.SetParent(transform);
    var model=bottleAsset?Instantiate(bottleAsset,root.transform):GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -31,7 +48,8 @@ public sealed partial class SplashGame {
    }
    var stone=GameObject.CreatePrimitive(PrimitiveType.Sphere);stone.name="Pebble";stone.transform.SetParent(root.transform,false);stone.transform.localScale=Vector3.one*.18f;
    var collider=stone.GetComponent<Collider>();if(collider){collider.enabled=false;Destroy(collider);}stone.GetComponent<Renderer>().sharedMaterial=dark;stone.SetActive(false);
-   root.SetActive(false);thrown[i]=new ThrownItem{t=root.transform,bottle=model,stone=stone};
+   var questBottle=new GameObject("Quest bottle");questBottle.transform.SetParent(root.transform,false);questBottle.AddComponent<MeshFilter>().sharedMesh=vrBottleMesh;questBottle.AddComponent<MeshRenderer>().sharedMaterial=bottleMaterial;questBottle.SetActive(false);
+   root.SetActive(false);thrown[i]=new ThrownItem{t=root.transform,bottle=model,vrBottle=questBottle,stone=stone};
   }
  }
  void ResetThrows(){CancelVRThrows();ResetFlares();ResetBottleShards();foreach(var item in thrown)if(item!=null){item.held=item.active=false;item.t.gameObject.SetActive(false);}}
@@ -39,13 +57,13 @@ public sealed partial class SplashGame {
   ThrownItem item=null;foreach(var candidate in thrown)if(!candidate.active){item=candidate;break;}
   if(item==null)item=thrown[0];
   item.active=true;item.held=item.physicalThrow=false;item.pebble=pebble;item.age=0;item.nextImpact=0;
-  item.t.gameObject.SetActive(true);item.t.localScale=Vector3.one;item.bottle.SetActive(!pebble);item.stone.SetActive(pebble);
+  item.t.gameObject.SetActive(true);item.t.localScale=Vector3.one*(vr?(pebble?1f/3f:.24f/.45f):1);item.bottle.SetActive(!pebble&&!vr);item.vrBottle.SetActive(!pebble&&vr);item.stone.SetActive(pebble);
   item.t.position=vr?ThrowOrigin.position+ThrowOrigin.forward*.2f:eye.transform.position+eye.transform.forward*.65f+eye.transform.right*.22f-Vector3.up*.22f;
   item.t.rotation=ThrowOrigin.rotation;
   item.velocity=ThrowOrigin.forward*(12*(1+rangeLevel*.2f))+Vector3.up*4;
   return item;
  }
- sealed class FlyingFlare {public GameObject root;public Vector3 velocity,angularVelocity;public float age;public bool active,landed,affected,held,physicalThrow;}
+ sealed class FlyingFlare {public GameObject root;public Light light;public MeshRenderer ember,smoke;public Vector3 velocity,angularVelocity;public float age;public bool active,landed,affected,held,physicalThrow;}
  readonly FlyingFlare[] flyingFlares=new FlyingFlare[8];
  Material flareBody,flareTip;
  bool LaunchFlare()=>PrepareFlare()!=null;
@@ -53,21 +71,23 @@ public sealed partial class SplashGame {
   int slot=-1;for(int i=0;i<flyingFlares.Length;i++)if(flyingFlares[i]==null||!flyingFlares[i].active){slot=i;break;}
   if(slot<0)return null;
   if(flyingFlares[slot]==null){
-   if(!flareBody){flareBody=Mat(new Color(.65f,.08f,.035f));flareTip=Mat(new Color(1,.3f,.035f),true);}
+   if(!flareBody){flareBody=Mat(new Color(.3f,.075f,.035f));flareTip=Mat(new Color(.5f,.18f,.045f),true);}
    var root=new GameObject("Thrown flare");root.transform.SetParent(transform);
    for(int part=0;part<2;part++){
     var mesh=GameObject.CreatePrimitive(PrimitiveType.Cylinder);mesh.transform.SetParent(root.transform,false);
-    mesh.transform.localScale=part==0?new Vector3(.11f,.23f,.11f):new Vector3(.13f,.06f,.13f);
+    mesh.transform.localScale=part==0?new Vector3(.07f,.23f,.07f):new Vector3(.085f,.06f,.085f);
     mesh.transform.localPosition=part==0?Vector3.zero:Vector3.up*.28f;
     mesh.GetComponent<Renderer>().sharedMaterial=part==0?flareBody:flareTip;
     var collider=mesh.GetComponent<Collider>();collider.enabled=false;Destroy(collider);
    }
-   var light=root.AddComponent<Light>();light.color=new Color(1,.22f,.035f);light.range=12;light.intensity=2;light.shadows=LightShadows.None;
-   flyingFlares[slot]=new FlyingFlare{root=root};
+   var emitter=new GameObject("Flare light");emitter.transform.SetParent(root.transform,false);emitter.transform.localPosition=Vector3.up*.28f;
+   var light=emitter.AddComponent<Light>();light.color=new Color(1,.43f,.16f);light.range=3;light.intensity=.7f;light.shadows=LightShadows.None;
+   flyingFlares[slot]=new FlyingFlare{root=root,light=light,ember=EffectSprite(root.transform,"Soft ember",softFX),smoke=EffectSprite(root.transform,"Tip smoke",smokeFX)};
   }
   var flare=flyingFlares[slot];flare.active=true;flare.held=flare.physicalThrow=flare.landed=flare.affected=false;flare.age=0;
   flare.root.SetActive(true);flare.root.transform.position=vr?ThrowOrigin.position+ThrowOrigin.forward*.2f:eye.transform.position+eye.transform.forward*.8f+eye.transform.right*.22f-Vector3.up*.2f;
   flare.root.transform.rotation=ThrowOrigin.rotation;
+  flare.root.transform.localScale=Vector3.one*(vr?.45f:1);
   flare.velocity=ThrowOrigin.forward*(14*(1+rangeLevel*.2f))+Vector3.up*3;
   return flare;
  }
@@ -75,11 +95,12 @@ public sealed partial class SplashGame {
  void TickFlares(float dt){
   foreach(var f in flyingFlares){
    if(f==null||!f.active||f.held)continue;
+   f.light.intensity=.7f;f.light.range=3;UpdateFlareBurn(f);
    f.age+=dt;
    if(!f.landed){
     Vector3 old=f.root.transform.position;f.velocity+=Vector3.down*18*dt;
     Vector3 delta=f.velocity*dt,next=old+delta;
-    bool hit=ProjectileContact(old,.1f,delta,out var contact);
+    bool hit=ProjectileContact(old,vr?.035f:.1f,delta,out var contact);
     if(hit){next=contact.point+contact.normal*.12f;f.landed=true;Sfx(landingSound);}
     // The creature's colliders are disabled, so test the swept flight separately.
     Vector3 center=monster.position+Vector3.up*1.5f;
@@ -108,7 +129,7 @@ public sealed partial class SplashGame {
    item.age+=dt;Vector3 old=item.t.position;
    item.velocity+=Vector3.down*18*dt;
    Vector3 next=old+item.velocity*dt,delta=next-old;
-   bool hit=ProjectileContact(old,.07f,delta,out var contact);
+   bool hit=ProjectileContact(old,vr?.03f:.07f,delta,out var contact);
    bool splash=TryWaterImpact(old,next,out var waterPoint)&&(!hit||Vector3.Distance(old,waterPoint)<contact.distance);
    if(hit&&!splash){
     if(!item.pebble){BreakBottle(contact.point+contact.normal*.06f);item.active=false;item.t.gameObject.SetActive(false);continue;}
@@ -117,7 +138,6 @@ public sealed partial class SplashGame {
    item.t.position=next;if(item.physicalThrow)RotateThrown(item.t,item.angularVelocity,dt);else item.t.Rotate(250*dt,80*dt,0,Space.Self);
    if(splash){
     next=waterPoint;Noise(next,item.pebble?4:9);Ripple(next);Sfx(splashClip);
-    if(item.pebble){pebbleSkips=2;pebblePoint=next;pebbleDirection=Vector3.ProjectOnPlane(item.velocity,Vector3.up).normalized;pebbleTimer=.4f;}
     item.active=false;item.t.gameObject.SetActive(false);
    }else if(item.age>6){item.active=false;item.t.gameObject.SetActive(false);}
   }

@@ -12,7 +12,8 @@ public sealed class MonsterPerformance : MonoBehaviour {
  Vector3 faceForwardLocal;
  Quaternion faceAimOffset;
  Transform[] strikeShoulders=new Transform[2],strikeElbows=new Transform[2],strikeHands=new Transform[2];
- int victimArm=-1;
+ int victimArm=-1;float victimSide;
+ Quaternion[] attackStartRotations;Vector3[] attackStartPositions;
  public Vector3 FaceForward=>face?face.TransformDirection(faceForwardLocal):transform.forward;
  public float StrikeProgress=>Mathf.Clamp01(attackClock/.68f);
  public Vector3 StrikePosition=>victimArm>=0?strikeHands[victimArm].position:FacePosition;
@@ -67,8 +68,8 @@ public sealed class MonsterPerformance : MonoBehaviour {
   }
   if(!breathClip){breathClip=Sound("Creature breathing",3.2f,48,.55f);alertClip=Sound("Listening growl",.85f,72,.8f);strikeClip=Sound("Attack roar",.7f,115,1);hitClip=Sound("Impact",.28f,35,1);waterClip=Sound("Water step",.32f,90,.75f);}
   if(waterSteps)waterClip=waterSteps;
-  breathing=Source(.55f);breathing.loop=true;breathing.clip=breathClip;
-  voice=Source(.8f);footsteps=Source(.35f);
+  breathing=Source(.055f);breathing.loop=true;breathing.clip=breathClip;
+  voice=Source(.28f);footsteps=Source(.15f);
  }
  AudioSource Source(float volume){var s=gameObject.AddComponent<AudioSource>();s.playOnAwake=false;s.spatialBlend=1;s.rolloffMode=AudioRolloffMode.Linear;s.minDistance=2;s.maxDistance=25;s.dopplerLevel=0;s.volume=volume;return s;}
  static AudioClip Sound(string name,float length,float hz,float rough){
@@ -84,7 +85,7 @@ public sealed class MonsterPerformance : MonoBehaviour {
  }
  public void Hear(){
   if(alertCooldown>0||Attacking)return;alertCooldown=2.8f;
-  voice.pitch=.85f;voice.PlayOneShot(alertClip,.7f);blend=1;
+  PlayVoice(alertClip,.85f);blend=1;
  }
  // Applied after the idle pose, so head movement never accumulates between frames.
  public void InspectVictim(float progress){
@@ -103,54 +104,67 @@ public sealed class MonsterPerformance : MonoBehaviour {
   }
   if(face)face.rotation=Quaternion.AngleAxis(turn*.5f,transform.up)*face.rotation;
  }
- public void PlayImpact(){voice.pitch=1;voice.PlayOneShot(hitClip,.6f);}
- // Applied after sampling the clip. The animation supplies the wind-up and
- // elbow bend; a two-bone correction steers its finishing strike to the HMD.
+ void PlayVoice(AudioClip clip,float pitch=1){voice.Stop();voice.pitch=pitch;voice.clip=clip;voice.Play();}
+ public void PlayImpact(){PlayVoice(hitClip);breathing.Stop();footsteps.Stop();}
+ // Keep the authored wind-up. Blend into a stable outward/down elbow pole;
+ // never let a nearly straight sampled arm flip the IK plane.
  public void AimAtVictim(Vector3 target,bool strike){
   Vector3 look=target-FacePosition;
   if(face&&look.sqrMagnitude>.0001f)face.rotation=Quaternion.LookRotation(look,Vector3.up)*faceAimOffset;
-  if(!strike||StrikeProgress<.25f)return;
+  if(!strike||StrikeProgress<.2f)return;
   if(victimArm<0){
    if(!strikeHands[0]||!strikeHands[1])return;
    victimArm=Vector3.Distance(strikeHands[0].position,target)<Vector3.Distance(strikeHands[1].position,target)?0:1;
+   victimSide=Mathf.Sign(Vector3.Dot(strikeShoulders[victimArm].position-transform.position,transform.right));
   }
   var shoulder=strikeShoulders[victimArm];var elbow=strikeElbows[victimArm];var hand=strikeHands[victimArm];
   if(!shoulder||!elbow||!hand)return;
-  Vector3 contact=target+(FacePosition-target).normalized*.18f;
-  float weight=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.25f,1,StrikeProgress));
-  Vector3 goal=Vector3.Lerp(hand.position,contact,weight),start=shoulder.position;
+  float side=victimSide;
+  Vector3 contact=target+(FacePosition-target).normalized*.45f+transform.right*(side*.08f)-Vector3.up*.06f;
+  float weight=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.2f,.95f,StrikeProgress));
+  Vector3 goal=contact,start=shoulder.position;
+  Quaternion shoulderPose=shoulder.localRotation,elbowPose=elbow.localRotation,handPose=hand.localRotation,handWorld=hand.rotation;
   float upper=Vector3.Distance(start,elbow.position),lower=Vector3.Distance(elbow.position,hand.position);
   Vector3 direction=(goal-start).normalized;
   float distance=Mathf.Clamp(Vector3.Distance(start,goal),Mathf.Abs(upper-lower)+.001f,upper+lower-.001f);
-  Vector3 bend=Vector3.ProjectOnPlane(elbow.position-start,direction).normalized;
-  if(bend.sqrMagnitude<.001f)bend=Vector3.ProjectOnPlane(transform.right,direction).normalized;
+  Vector3 bend=Vector3.ProjectOnPlane(transform.right*side-Vector3.up*.65f,direction).normalized;
+  if(bend.sqrMagnitude<.001f)bend=Vector3.ProjectOnPlane(-transform.forward,direction).normalized;
   float along=(upper*upper-lower*lower+distance*distance)/(2*distance);
   Vector3 elbowGoal=start+direction*along+bend*Mathf.Sqrt(Mathf.Max(0,upper*upper-along*along));
   shoulder.rotation=Quaternion.FromToRotation(elbow.position-start,elbowGoal-start)*shoulder.rotation;
   elbow.rotation=Quaternion.FromToRotation(hand.position-elbow.position,start+direction*distance-elbow.position)*elbow.rotation;
+  Quaternion shoulderSolved=shoulder.localRotation,elbowSolved=elbow.localRotation;
+  shoulder.localRotation=Quaternion.Slerp(shoulderPose,shoulderSolved,weight);
+  elbow.localRotation=Quaternion.Slerp(elbowPose,elbowSolved,weight);
+  // Preserve the clip's wrist attitude without allowing an extreme wrist kink.
+  Quaternion desiredWrist=Quaternion.Inverse(hand.parent.rotation)*handWorld;
+  hand.localRotation=Quaternion.Slerp(handPose,Quaternion.RotateTowards(handPose,desiredWrist,35),weight);
  }
  public void BeginAttack(){
   if(Attacking)return;attackClock=0;impactSent=false;
+  if(attackStartRotations==null){attackStartRotations=new Quaternion[rig.Length];attackStartPositions=new Vector3[rig.Length];}
+  for(int i=0;i<rig.Length;i++){attackStartRotations[i]=rig[i].localRotation;attackStartPositions[i]=rig[i].localPosition;}
   if(graph.IsValid())attackPlayable.SetTime(0);
-  voice.pitch=1;voice.PlayOneShot(strikeClip,.8f);
+  PlayVoice(strikeClip);footsteps.Stop();
  }
  public void ResetPose(){victimArm=-1;jawsCaptured=false;runBlend=0;gaitClock=0;attackClock=-1;impactSent=false;blend=0;alertCooldown=0;stepClock=0;stunnedBefore=false;voice.Stop();footsteps.Stop();breathing.Stop();Restore();}
  void Restore(){for(int i=0;i<rig.Length;i++){rig[i].localRotation=rigRotations[i];rig[i].localPosition=rigPositions[i];}visual.localPosition=visualHome;visual.localRotation=visualRotation;}
  // Returns one impact pulse; the game checks water, range and stun again at that moment.
  public bool Tick(float dt,bool active,bool hunting,bool stunned,float distance,float movement=1){
-  if(!active){if(breathing.isPlaying)breathing.Pause();return false;}
+  if(!active){breathing.Stop();voice.Stop();footsteps.Stop();return false;}
   clock+=dt;alertCooldown-=dt;blend=Mathf.MoveTowards(blend,0,dt);
-  if(distance<25&&!stunned){if(!breathing.isPlaying)breathing.Play();breathing.volume=Mathf.Lerp(.18f,.48f,1-distance/25);breathing.pitch=hunting?1.12f:.8f;}
+  if(distance<18&&!stunned&&!Attacking){if(!breathing.isPlaying)breathing.Play();breathing.volume=Mathf.Lerp(.015f,.055f,1-distance/18);breathing.pitch=hunting?1:.9f;}
   else if(breathing.isPlaying)breathing.Stop();
-  if(stunned){if(!stunnedBefore){voice.Stop();voice.pitch=.6f;voice.PlayOneShot(alertClip,.5f);}attackClock=-1;Restore();visual.localRotation=visualRotation*Quaternion.Euler(12,0,Mathf.Sin(clock*18)*3);stunnedBefore=true;return false;}
+  if(stunned){if(!stunnedBefore)PlayVoice(alertClip,.7f);footsteps.Stop();attackClock=-1;Restore();visual.localRotation=visualRotation*Quaternion.Euler(12,0,Mathf.Sin(clock*3)*1);stunnedBefore=true;return false;}
   stunnedBefore=false;
   if(Attacking){
    attackClock+=dt;
    if(graph.IsValid()){mixer.SetInputWeight(3,0);mixer.SetInputWeight(4,0);mixer.SetInputWeight(0,0);mixer.SetInputWeight(1,0);mixer.SetInputWeight(2,1);attackPlayable.SetTime(attackClock/1.05f*attackDuration);graph.Evaluate(0);}
    else{Restore();visual.localRotation=visualRotation*Quaternion.Euler(Mathf.Sin(attackClock*3)*-24,0,0);}
+   if(attackStartRotations!=null&&attackClock<.18f){float blendIn=Mathf.SmoothStep(0,1,attackClock/.18f);for(int i=0;i<rig.Length;i++){rig[i].localRotation=Quaternion.Slerp(attackStartRotations[i],rig[i].localRotation,blendIn);rig[i].localPosition=Vector3.Lerp(attackStartPositions[i],rig[i].localPosition,blendIn);}}
    if(jawsCaptured)for(int i=0;i<jaws.Count;i++)jaws[i].localRotation=openJaws[i];
    visual.localRotation=visualRotation;
-   visual.localPosition=visualHome+Vector3.forward*(Mathf.Sin(Mathf.Clamp01(attackClock/1.05f)*Mathf.PI)*.55f);
+   visual.localPosition=visualHome;
    bool impact=!impactSent&&attackClock>=.68f;
    if(impact)impactSent=true;
    if(attackClock>=1.05f){attackClock=-1;Restore();}
@@ -164,16 +178,19 @@ public sealed class MonsterPerformance : MonoBehaviour {
    if(hasWalk)walkPlayable.SetTime(gaitClock%walkDuration);
    idlePlayable.SetTime(clock%idleDuration);runPlayable.SetTime(gaitClock%runDuration);graph.Evaluate(0);
   }
-  float rate=movement>.1f?(hunting?18:6):1.4f;
-  visual.localPosition=visualHome+Vector3.up*(Mathf.Sin(clock*rate)*.055f);
-  visual.localRotation=visualRotation*Quaternion.Euler(hunting?8:0,0,Mathf.Sin(clock*rate)*2);
+  // The imported run already contains body motion. Do not add a fast 18 Hz
+  // sway on top or change sine phase abruptly as the creature stops.
+  float rate=1.4f;
+  visual.localPosition=visualHome+Vector3.up*(Mathf.Sin(clock*rate)*.008f);
+  visual.localRotation=visualRotation*Quaternion.Euler(hunting?runBlend*4:0,0,Mathf.Sin(clock*rate)*.4f);
   for(int i=0;i<bones.Count;i++){bool neck=bones[i].name.IndexOf("neck",System.StringComparison.OrdinalIgnoreCase)>=0;bones[i].localRotation=(hasLocomotion?bones[i].localRotation:rests[i])*Quaternion.Euler(Mathf.Sin(clock*2+i)*1.8f+(neck?blend*-12:0),neck?Mathf.Sin(clock*1.3f)*7+blend*16:0,Mathf.Sin(clock*rate+i)*2);}
   if(!hasLocomotion)for(int i=0;i<limbs.Count;i++){
    string n=limbs[i].name.ToLowerInvariant();float side=n.Contains("left")||n.EndsWith("_l")||n.StartsWith("l_")?1:-1;
    float stride=movement>.1f?Mathf.Sin(clock*rate+side*1.57f)*(hunting?25:12):Mathf.Sin(clock*1.1f+i)*2;
    limbs[i].localRotation=limbRests[i]*Quaternion.Euler(stride,0,side*(hunting?8:3));
   }
-  stepClock-=dt;if(stepClock<=0&&distance<23&&movement>.1f){footsteps.pitch=hunting?1.2f:.8f;footsteps.PlayOneShot(waterClip);stepClock=Mathf.Clamp(2.5f/Mathf.Max(movement,.1f),.22f,1.2f);}
+  stepClock-=dt;if(stepClock<=0&&distance<18&&movement>.4f){footsteps.pitch=hunting?1.05f:.95f;footsteps.clip=waterClip;footsteps.Play();stepClock=Mathf.Clamp(2.5f/Mathf.Max(movement,.1f),.38f,1.2f);}
+  if(movement<=.4f&&footsteps.isPlaying)footsteps.Stop();
   return false;
  }
  void OnDestroy(){if(graph.IsValid())graph.Destroy();}

@@ -1,0 +1,16 @@
+[
+  {
+    "Url": "https://kaevgames.com/vr/privacy-policy",
+    "Status": 200,
+    "ContentType": "text/html; charset=utf-8",
+    "MatchesLocal": true,
+    "NoScripts": true
+  },
+  {
+    "Url": "https://kaevgames.com/vr/terms-of-service",
+    "Status": 200,
+    "ContentType": "text/html; charset=utf-8",
+    "MatchesLocal": true,
+    "NoScripts": true
+  }
+]

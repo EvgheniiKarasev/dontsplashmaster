@@ -1,5 +1,6 @@
 //Set this to value to 1 through Shader.SetGlobalFloat to temporarily disable fog for water
 float _WaterFogDisabled;
+#include "Assets/DontSplash/Shaders/Atmosphere.hlsl"
 
 //Authors of third-party fog solutions can reach out to have their method integrated here
 
@@ -19,10 +20,10 @@ bool AHF_Enabled;
 #endif
 
 //Fragment stage. Note: Screen position passed here is not normalized (divided by w-component)
-void ApplyFog(inout float3 color, float fogFactor, float4 screenPos, float3 positionWS, float vFace) 
+void ApplyFog(inout float3 color, float fogFactor, float4 screenPos, float3 positionWS, float vFace)
 {
 	float3 foggedColor = color;
-	
+
 #ifdef UnityFog
 	foggedColor = MixFog(color.rgb, fogFactor);
 #endif
@@ -30,7 +31,7 @@ void ApplyFog(inout float3 color, float fogFactor, float4 screenPos, float3 posi
 #ifdef Colorful
 	if(_DensityParams.x > 0) foggedColor.rgb = ApplyFog(color.rgb, fogFactor, positionWS, screenPos.xy / screenPos.w);
 #endif
-	
+
 #ifdef Enviro
 	//Distance/height fog enabled?
 	if (_EnviroParams.y > 0 || _EnviroParams.z > 0)
@@ -45,7 +46,7 @@ void ApplyFog(inout float3 color, float fogFactor, float4 screenPos, float3 posi
 		foggedColor.rgb = ApplyFogAndVolumetricLights(color.rgb, screenPos.xy / screenPos.w, positionWS, 0);
 	}
 #endif
-	
+
 #ifdef Azure
 	foggedColor.rgb = ApplyAzureFog(float4(color.rgb, 1.0), positionWS).rgb;
 #endif
@@ -83,7 +84,9 @@ void ApplyFog(inout float3 color, float fogFactor, float4 screenPos, float3 posi
 	//Allow fog to be disabled for water globally by setting the value through script
 	foggedColor = lerp(foggedColor, color, _WaterFogDisabled);
 	#endif
-	
+
 	//Fog only applies to the front faces, otherwise affects underwater rendering
+	// Match the room's per-pixel radial fog on the sparsely tessellated water.
+	if (_DSFogDistances.z > 0) foggedColor = DSApplyFog(color, positionWS);
 	color.rgb = lerp(color.rgb, foggedColor.rgb, vFace);
 }

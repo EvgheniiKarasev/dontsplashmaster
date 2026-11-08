@@ -36,17 +36,22 @@ public static class QuestHands {
     PrefabUtility.SaveAsPrefabAsset(root,path);
    }finally{UnityEngine.Object.DestroyImmediate(root);}
   }
-  // Both imported skeletons use the same wrist axes. The sample's right root
-  // offset is not the mirrored left grip pose; correct the visual, not XR input.
-  var left=AssetDatabase.LoadAssetAtPath<GameObject>(Folder+"/LeftHand.prefab").transform.Find("OpenXRLeftHand");
-  var right=PrefabUtility.LoadPrefabContents(Folder+"/RightHand.prefab");
-  try{
-   var model=right.transform.Find("OpenXRRightHand");var q=left.localRotation;var p=left.localPosition;
-   var rotation=new Quaternion(q.x,-q.y,-q.z,q.w);var position=new Vector3(-p.x,p.y,p.z);
-   if(Quaternion.Angle(model.localRotation,rotation)>.001f||Vector3.Distance(model.localPosition,position)>.0001f){
-    model.SetLocalPositionAndRotation(position,rotation);PrefabUtility.SaveAsPrefabAsset(right,Folder+"/RightHand.prefab");
-   }
-  }finally{PrefabUtility.UnloadPrefabContents(right);}
+  // The sample offsets expect Meta's controller root, not a raw OpenXR grip.
+  // Match FromUnityXRControllerDataSource's FlipZ / tip conversion before
+  // applying each ORIGINAL hand offset. Mirroring the left offset is incorrect.
+  foreach(string side in new[]{"Left","Right"}){
+   var sourceHand=asset.GetComponentsInChildren<Transform>(true).First(t=>t.name=="OpenXR"+side+"Hand");
+   var tip=side=="Left"?Quaternion.AngleAxis(90,Vector3.forward):Quaternion.AngleAxis(180,Vector3.right)*Quaternion.AngleAxis(-90,Vector3.forward);
+   var q=Quaternion.Inverse(tip);var correction=new Quaternion(-q.x,-q.y,q.z,q.w);
+   string path=Folder+"/"+side+"Hand.prefab";var root=PrefabUtility.LoadPrefabContents(path);
+   try{
+    var model=root.transform.Find("OpenXR"+side+"Hand");
+    var rotation=correction*sourceHand.localRotation;var position=correction*sourceHand.localPosition;
+    if(Quaternion.Angle(model.localRotation,rotation)>.001f||Vector3.Distance(model.localPosition,position)>.0001f){
+     model.SetLocalPositionAndRotation(position,rotation);PrefabUtility.SaveAsPrefabAsset(root,path);
+    }
+   }finally{PrefabUtility.UnloadPrefabContents(root);}
+  }
  }
 }
 }

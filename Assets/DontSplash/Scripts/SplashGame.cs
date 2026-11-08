@@ -41,16 +41,16 @@ public sealed partial class SplashGame : MonoBehaviour {
   var player=new GameObject("Player");body=player.AddComponent<CharacterController>();body.height=1.8f;body.radius=.28f;body.center=Vector3.up*.9f;body.stepOffset=.28f;
   eye=new GameObject("Camera").AddComponent<Camera>();eye.transform.SetParent(player.transform);eye.transform.localPosition=Vector3.up*1.6f;eye.nearClipPlane=.07f;eye.farClipPlane=115;eye.fieldOfView=76;eye.gameObject.AddComponent<AudioListener>();eye.backgroundColor=RenderSettings.fogColor;eye.clearFlags=CameraClearFlags.SolidColor;var cameraData=eye.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();cameraData.requiresDepthTexture=true;cameraData.requiresColorTexture=false;
   var lamp=eye.gameObject.AddComponent<Light>();lamp.type=LightType.Spot;lamp.range=24;lamp.spotAngle=75;lamp.intensity=2;lamp.color=new Color(1,.92f,.69f);lamp.shadows=LightShadows.None;
-  audioSource=gameObject.AddComponent<AudioSource>();audioSource.volume=.4f;
+  audioSource=gameObject.AddComponent<AudioSource>();audioSource.playOnAwake=false;audioSource.volume=.24f;PrepareGameplayAudio();
   splashClip=waterImpactSound?waterImpactSound:Tone("Splash",110,.6f,true);jumpClip=playerJumpSound?playerJumpSound:Tone("Jump",250,.12f,false);clickClip=Tone("Valve",620,.16f,false);alarmClip=Tone("Threat",65,.5f,false);
-  ambience=gameObject.AddComponent<AudioSource>();ambience.clip=roomAmbienceSound?roomAmbienceSound:Tone("Ventilation",52,3,true);ambience.loop=true;ambience.volume=.12f;
-  playerFeet=gameObject.AddComponent<AudioSource>();playerFeet.playOnAwake=false;playerFeet.volume=.45f;
+  ambience=gameObject.AddComponent<AudioSource>();ambience.playOnAwake=false;ambience.clip=roomAmbienceSound?roomAmbienceSound:Tone("Ventilation",52,3,true);ambience.loop=true;ambience.volume=.28f;ambience.spatialBlend=0;ambience.priority=64;
+  playerFeet=gameObject.AddComponent<AudioSource>();playerFeet.playOnAwake=false;playerFeet.volume=.55f;playerFeet.spatialBlend=0;playerFeet.priority=32;
   touchMode=Application.isMobilePlatform;TryInitializeVR();
+  muted=PlayerPrefs.GetInt("DS.Muted")==1;AudioListener.volume=muted?0:1;
   LoadEconomy();InitializeFX();InitializeThrows();BuildRoom();InitializeUI();
  }
  Material Mat(Color c,bool emission=false){var m=surfaceMaterial?new Material(surfaceMaterial):new Material(Shader.Find("Universal Render Pipeline/Lit"));m.color=c;if(emission){m.EnableKeyword("_EMISSION");m.SetColor("_EmissionColor",c*1.4f);}return m;}
  AudioClip Tone(string n,float f,float seconds,bool noise){int count=(int)(22050*seconds);float[] data=new float[count];uint state=17;for(int i=0;i<count;i++){state=state*1664525+1013904223;float random=(state>>8)/16777216f*2-1;float t=i/22050f;data[i]=(Mathf.Sin(t*f*6.28318f)*.3f+(noise?random*.2f:0))*Mathf.Sin(Mathf.PI*i/count);}var clip=AudioClip.Create(n,count,1,22050,false);clip.SetData(data,0);return clip;}
- void Sfx(AudioClip clip){if(clip&&!muted)audioSource.PlayOneShot(clip);}
  GameObject Shape(string n,Vector3 p,Vector3 size,Material m,bool solid=true,PrimitiveType shape=PrimitiveType.Cube){
   var g=GameObject.CreatePrimitive(shape);g.name=n;g.transform.SetParent(room);g.transform.position=p;g.transform.localScale=size;g.GetComponent<Renderer>().sharedMaterial=m;
   if(!solid){var c=g.GetComponent<Collider>();if(c){c.enabled=false;Destroy(c);}}return g;
@@ -71,7 +71,7 @@ public sealed partial class SplashGame : MonoBehaviour {
  void BuildRoom(){
   ResetThrows();
   if(room){room.gameObject.SetActive(false);Destroy(room.gameObject);}roomLabels.Clear();steps.Clear();valves.Clear();crushers.Clear();ripples.Clear();room=new GameObject("Chamber "+stage+"."+leg).transform;
-  roomSplashed=false;pebbleSkips=0;bonusCoins.Clear();checkpointZ=0;checkpointIndex=-1;codeOpen=false;code="";hold=0;heard=0;stun=0;wet=0;simTime=0;
+  roomSplashed=false;bonusCoins.Clear();checkpointZ=0;checkpointIndex=-1;codeOpen=false;code="";hold=0;heard=0;stun=0;wet=0;simTime=0;
   ApplyAtmosphere();
   Shape("Water / Stylized Water 2",new Vector3(0,WaterY,EndZ/2),new Vector3(HallWidth*.2f,1,(EndZ+20)/10),water,false,PrimitiveType.Plane);
   Shape("Pool bottom",new Vector3(0,-2.5f,EndZ/2),new Vector3(HallWidth*2,1,EndZ+20),dark);
@@ -100,7 +100,7 @@ public sealed partial class SplashGame : MonoBehaviour {
  void Respawn(){
   tutorialJumpLaunched=tutorialAirborne=false;tutorialJumpDone=PlayerPrefs.GetInt("DS.JumpLearned")==1;
   attemptBest=0;attemptMilestone=0;attemptTracked=false;jumpHintShown=false;
-  ResetThrows();stun=0;cooldown=0;footTravel=0;alternateFoot=false;if(playerFeet)playerFeet.Stop();
+  ResetThrows();ResetAtmosphericFX();StopGameplaySounds();stun=0;cooldown=0;footTravel=0;alternateFoot=false;playerContact.Reset();
   if(creature)creature.ResetPose();attackRecovery=0;hitShake=0;
   body.enabled=false;body.transform.position=spawn;body.enabled=true;vertical=-2;wet=0;heard=0;jump=false;lookReady=false;moveFinger=lookFinger=useFinger=-1;move=look=Vector2.zero;throwInput=flareInput=jump=false;use=false;
   yaw=0;pitch=0;eye.fieldOfView=76;eye.transform.localRotation=Quaternion.identity;ParkCreature();ResetVRPosition();
@@ -117,16 +117,22 @@ public sealed partial class SplashGame : MonoBehaviour {
 #endif
 hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:CursorLockMode.None;Cursor.visible=!locked||touchMode;}
  void StartRun(bool saved){
+  saved=saved&&HasSavedRun;confirmNewRun=false;AudioListener.pause=false;
   shoreGuideReached=false;
   stage=saved?Mathf.Clamp(PlayerPrefs.GetInt("Chamber"),0,8):0;leg=saved?Mathf.Clamp(PlayerPrefs.GetInt("Leg"),0,2):0;
-  elapsed=saved?PlayerPrefs.GetFloat("Time"):0;deaths=0;completed=stage*3+leg;
-  BuildRoom();mode=Mode.Play;CursorState(true);if(!muted)ambience.Play();
+  elapsed=saved?Mathf.Max(0,PlayerPrefs.GetFloat("Time")):0;deaths=saved?Mathf.Max(0,PlayerPrefs.GetInt("DS.Deaths")):0;completed=stage*3+leg;
+  BuildRoom();if(saved)RestoreRunCheckpoint();mode=saved&&FirstGiftPending?Mode.Between:Mode.Play;CursorState(mode==Mode.Play);Save();if(!muted)ambience.Play();
  }
  void Pause(){if(mode!=Mode.Play)return;mode=Mode.Pause;CancelVRThrows();CursorState(false);AudioListener.pause=true;moveFinger=lookFinger=useFinger=-1;move=look=Vector2.zero;throwInput=flareInput=jump=false;use=false;}
  void ContinueGame(System.Action next){if(SystemSuspended)return;AudioListener.pause=false;next();}
  void Resume(){ContinueGame(()=>{mode=Mode.Play;CursorState(true);});}
  void Die(){if(mode==Mode.Play)BeginCatch();}
- void Save(){PlayerPrefs.SetInt("Chamber",stage);PlayerPrefs.SetInt("Leg",leg);PlayerPrefs.SetFloat("Time",elapsed);PlayerPrefs.SetInt("HasSave",1);PlayerPrefs.Save();}
+ void Save(){
+  PlayerPrefs.SetInt("Chamber",stage);PlayerPrefs.SetInt("Leg",leg);PlayerPrefs.SetFloat("Time",elapsed);PlayerPrefs.SetInt("DS.Deaths",deaths);PlayerPrefs.SetInt("HasSave",1);
+  PlayerPrefs.SetInt("DS.Checkpoint",mode==Mode.Between?-1:checkpointIndex);
+  int mask=0;if(mode!=Mode.Between)for(int i=0;i<valves.Count;i++)if(valves[i].done)mask|=1<<i;
+  PlayerPrefs.SetInt("DS.Valves",mask);PlayerPrefs.Save();
+ }
  void Finish(){
   EndAttempt(true);
   if(FirstChamber&&PlayerPrefs.GetInt("DS.FirstGiftClaimed")==0)PlayerPrefs.SetInt("DS.FirstGiftPending",1);
@@ -151,7 +157,9 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
   ReadInput();TickShoreGuide();TickEconomy(dt);if(mode!=Mode.Play)return;
   UpdateLook(dt);TickThrows(dt);
   if(jump)jumpBuffer=.16f;else jumpBuffer-=dt;jump=false;
-  bool grounded=body.isGrounded;if(grounded)coyote=.12f;else coyote-=dt;
+  // Room-scale Move and capsule resizing can overwrite CharacterController's
+  // last collision flags. Only the gravity/locomotion move owns floor contact.
+  bool grounded=playerContact.grounded;if(grounded)coyote=.12f;else coyote-=dt;
   foreach(var p in steps){
    if(p.kind<1||p.kind>4)continue;
    if((p.t.position-body.transform.position).sqrMagnitude>1600)continue;
@@ -168,9 +176,9 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
   vertical-=(vertical>0?22f:29f)*dt;Vector3 v=vr?VRMoveDirection():body.transform.TransformDirection(new Vector3(move.x,0,move.y))*RunSpeed;
   Vector3 beforeMove=body.transform.position;float fallingSpeed=vertical;
   body.Move((v+Vector3.up*vertical)*dt);
-  TickPlayerFootsteps(beforeMove,grounded,fallingSpeed);
+  TickPlayerFootsteps(beforeMove,fallingSpeed,dt);
   bool inWater=body.transform.position.y<WaterY-.05f;
-  if(inWater){roomSplashed=true;if(wet==0){Noise(body.transform.position,9);Sfx(splashClip);Ripple(body.transform.position);}wet+=dt;if(body.transform.position.y<WaterY-.12f){body.Move(Vector3.up*(WaterY-.12f-body.transform.position.y));vertical=Mathf.Max(vertical,0);}if(wet>(assist?7:5)&&stun<=0)Die();if(jumpBuffer>0){vertical=9.5f;jumpBuffer=0;Noise(body.transform.position,8);}}else wet=0;
+  if(inWater){roomSplashed=true;if(wet==0){Noise(body.transform.position,9);Sfx(splashClip);Ripple(body.transform.position);}wet+=dt;if(body.transform.position.y<WaterY-.12f){body.Move(Vector3.up*(WaterY-.12f-body.transform.position.y));vertical=Mathf.Max(vertical,0);}if(jumpBuffer>0){vertical=9.5f;jumpBuffer=0;Noise(body.transform.position,8);}if(wet>(assist?7:5)&&stun<=0&&vertical<=0)Die();}else wet=0;
   TickJumpLesson();
   if(body.transform.position.y<-4)Die();
   if(mode!=Mode.Play)return;
@@ -206,15 +214,17 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
   if(flares>0)flares--;else{reserveFlares--;SaveEconomy();}
   cooldown=1;Sfx(throwSound);
  }
- void TickPlayerFootsteps(Vector3 previous,bool wasGrounded,float fallingSpeed){
+ bool TickPlayerFootsteps(Vector3 previous,float fallingSpeed,float dt){
   bool water=body.transform.position.y<WaterY-.05f;
-  if(!wasGrounded&&body.isGrounded&&!water&&fallingSpeed<-2.5f){Sfx(landingSound);footTravel=0;return;}
-  if((!body.isGrounded&&!water)||move.sqrMagnitude<.01f){footTravel=0;return;}
+  bool landed=playerContact.Step(body.isGrounded,previous.y,body.transform.position.y,fallingSpeed,dt,water);
+  if(landed){Sfx(landingSound);footTravel=0;return true;}
+  if((!body.isGrounded&&!water)||move.sqrMagnitude<.01f){footTravel=0;return false;}
   footTravel+=Vector3.ProjectOnPlane(body.transform.position-previous,Vector3.up).magnitude;
-  if(footTravel<(water?1.9f:2.2f))return;
+  if(footTravel<(water?1.9f:2.2f))return false;
   footTravel=0;alternateFoot=!alternateFoot;
   var clip=water?waterStepSound:playerStepSound;
-  if(clip&&!muted){playerFeet.pitch=alternateFoot?1f:1.08f;playerFeet.PlayOneShot(clip,water?.75f:1f);}
+  if(clip&&!muted){playerFeet.pitch=alternateFoot?1f:1.04f;playerFeet.clip=clip;playerFeet.Play();}
+  return false;
  }
  void ReadInput(){
   if(vr){ReadVRInput();return;}
@@ -246,7 +256,7 @@ hadPointerLock=false;Cursor.lockState=locked&&!touchMode?CursorLockMode.Locked:C
  Rect ThrowRect=>new Rect(uw/2-94,uh-108,86,86);
  Rect FlareRect=>new Rect(uw/2+8,uh-108,86,86);
  Rect UseRect=>new Rect(uw-245,uh-220,76,76);
- void OnDestroy(){DisposeVR();AudioListener.pause=false;Cursor.lockState=CursorLockMode.None;}
+ void OnDestroy(){DisposeVR();DisposeGameplayAudio();DisposeAtmosphericFX();if(vrBottleMesh)Destroy(vrBottleMesh);Shader.SetGlobalVector("_DSFogDistances",Vector4.zero);AudioListener.pause=false;Cursor.lockState=CursorLockMode.None;}
  string TimeText(){int t=(int)elapsed;return (t/60).ToString("00")+":"+(t%60).ToString("00");}
 }
 }
